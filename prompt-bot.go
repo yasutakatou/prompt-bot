@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -100,7 +101,14 @@ func main() {
 					switch event := innerEvent.Data.(type) {
 					case *slackevents.MessageEvent:
 						fmt.Println("text: " + event.Text)
-						str, eflag := validMessage(event.Text, *_Record, *_Result, *_Search)
+
+						actualAttachmentJson, err := json.Marshal(event.Files)
+						if err != nil {
+							fmt.Println("expected no error unmarshaling attachment with blocks, got: %v", err)
+						}
+						mess := string(actualAttachmentJson)
+
+						str, eflag := validMessage(event.Text, *_Record, *_Result, *_Search, mess)
 						switch eflag {
 						case 0:
 							matches := index.FindBestMatch(str)
@@ -136,7 +144,13 @@ func main() {
 								fmt.Printf("upload! Name: %s, URL: %s\n", file.Name, file.URL, file.ID)
 							}
 						case 1:
-							//pic
+							strc := rejectEscape(event.Text)
+							writePicIni(api, strc, event.Text, str, RandStr(8), *_Ini)
+							index = reLoad(*_Ini, index)
+							_, _, err := api.PostMessage(event.Channel, slack.MsgOptionText("Registered!", false))
+							if err != nil {
+								fmt.Printf("failed posting message: %v", err)
+							}
 						case 2:
 							strb := strings.Split(str, *_Result)
 							strc := rejectEscape(strb[0])
@@ -179,6 +193,28 @@ func rejectEscape(str string) string {
 	return stra
 }
 
+func writePicIni(api *slack.Client, indexWord, prompt, url, filename, indexFile string) {
+	writeFile(filename+"_prompt", prompt)
+
+	f, err := os.Create(filename + "_result")
+	defer f.Close()
+	if err != nil {
+		return
+	}
+	err = api.GetFile(url, f)
+	if err != nil {
+		fmt.Printf("%s\n", err)
+		return
+	}
+
+	file, err := os.OpenFile(indexFile, os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+	fmt.Fprintln(file, indexWord+"\t"+filename+"_prompt"+"\t"+filename+"_result"+"\t"+"p")
+}
+
 func writeTextIni(indexWord, prompt, result, filename, indexfile string) {
 	writeFile(filename+"_prompt", prompt)
 	writeFile(filename+"_result", result)
@@ -207,7 +243,7 @@ func writeFile(filename, stra string) bool {
 	return true
 }
 
-func validMessage(text, record, result, search string) (string, int) {
+func validMessage(text, record, result, search, mess string) (string, int) {
 	if strings.Index(text, search) == 0 {
 		stra := strings.Replace(text, search, "", -1)
 		if len(stra) < 1 {
@@ -224,7 +260,17 @@ func validMessage(text, record, result, search string) (string, int) {
 		if strings.Index(stra, result+"\n") != -1 {
 			return stra, 2
 		}
-		return stra, 1
+		if strings.Index(mess, "url_private_download") != -1 {
+			strb := strings.Split(mess, "url_private_download")
+			fmt.Println(strb)
+			strc := strings.Split(strb[1], ",")
+			fmt.Println(strc[0])
+			strd := strings.Replace(strc[0], "\"", "", -1)
+			strd = strings.Replace(strd, "\\", "", -1)
+			strd = strings.Replace(strd, ":", "", 1)
+			fmt.Println(strd)
+			return strd, 1
+		}
 	}
 
 	return "", -1
