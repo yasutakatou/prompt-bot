@@ -136,9 +136,23 @@ func main() {
 								fmt.Printf("upload! Name: %s, URL: %s\n", file.Name, file.URL, file.ID)
 							}
 						case 1:
+							//pic
 						case 2:
+							strb := strings.Split(str, *_Result)
+							strc := rejectEscape(strb[0])
+							writeTextIni(strc, strb[0], strb[0], RandStr(8), *_Ini)
+							index = reLoad(*_Ini, index)
+							_, _, err := api.PostMessage(event.Channel, slack.MsgOptionText("Registered!", false))
+							if err != nil {
+								fmt.Printf("failed posting message: %v", err)
+							}
 						case 10:
 							_, _, err := api.PostMessage(event.Channel, slack.MsgOptionText("Please specify search words", false))
+							if err != nil {
+								fmt.Printf("failed posting message: %v", err)
+							}
+						case 20:
+							_, _, err := api.PostMessage(event.Channel, slack.MsgOptionText("Please specify prompt words", false))
 							if err != nil {
 								fmt.Printf("failed posting message: %v", err)
 							}
@@ -157,9 +171,40 @@ func main() {
 	os.Exit(0)
 }
 
-func Exists(filename string) bool {
-	_, err := os.Stat(filename)
-	return err == nil
+func rejectEscape(str string) string {
+	stra := strings.Replace(str, "\n", "", -1)
+	stra = strings.Replace(stra, "\t", "", -1)
+	stra = strings.Replace(stra, " ", "", -1)
+	stra = strings.Replace(stra, "　", "", -1)
+	return stra
+}
+
+func writeTextIni(indexWord, prompt, result, filename, indexfile string) {
+	writeFile(filename+"_prompt", prompt)
+	writeFile(filename+"_result", result)
+
+	file, err := os.OpenFile(indexfile, os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+	fmt.Fprintln(file, indexWord+"\t"+filename+"_prompt"+"\t"+filename+"_result"+"\t"+"t")
+}
+
+func writeFile(filename, stra string) bool {
+	file, err := os.Create(filename)
+	if err != nil {
+		fmt.Println(err)
+		return false
+	}
+	defer file.Close()
+
+	_, err = file.WriteString(stra + "\n")
+	if err != nil {
+		fmt.Println(err)
+		return false
+	}
+	return true
 }
 
 func validMessage(text, record, result, search string) (string, int) {
@@ -170,6 +215,18 @@ func validMessage(text, record, result, search string) (string, int) {
 		}
 		return stra, 0
 	}
+
+	if strings.Index(text, record) == 0 {
+		stra := strings.Replace(text, record, "", -1)
+		if len(stra) < 1 {
+			return "", 20
+		}
+		if strings.Index(stra, result+"\n") != -1 {
+			return stra, 2
+		}
+		return stra, 1
+	}
+
 	return "", -1
 }
 
@@ -222,4 +279,12 @@ func readText(filename string, sFlag bool) (string, int) {
 
 	fmt.Printf("lines: %d\n", line)
 	return str, line
+}
+
+func RandStr(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = rs1Letters[rand.Intn(len(rs1Letters))]
+	}
+	return string(b)
 }
