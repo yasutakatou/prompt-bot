@@ -39,7 +39,8 @@ func main() {
 	debug = bool(*_Debug)
 	logging = bool(*_Logging)
 
-	index := ngram.NewIndex(getLines(*_Ini))
+	_, count := readText(*_Ini, false)
+	index := ngram.NewIndex(count)
 	index = reLoad(*_Ini, index)
 
 	appToken := os.Getenv("SLACK_APP_TOKEN")
@@ -105,9 +106,42 @@ func main() {
 							matches := index.FindBestMatch(str)
 							fmt.Printf("matched %s\n", matches)
 							strb := strings.Split(matches, "\t")
-
+							if strb[3] == "t" {
+								strc, _ := readText(strb[1], true)
+								_, _, err := api.PostMessage(event.Channel, slack.MsgOptionText("prompt\n```\n"+strc+"```\n", false))
+								if err != nil {
+									fmt.Printf("failed posting message: %v", err)
+								}
+								strc, _ = readText(strb[2], true)
+								_, _, err = api.PostMessage(event.Channel, slack.MsgOptionText("result\n```\n"+strc+"```\n", false))
+								if err != nil {
+									fmt.Printf("failed posting message: %v", err)
+								}
+							} else {
+								strc, _ := readText(strb[1], true)
+								_, _, err := api.PostMessage(event.Channel, slack.MsgOptionText("prompt\n```\n"+strc+"```\n", false))
+								if err != nil {
+									fmt.Printf("failed posting message: %v", err)
+								}
+								params := slack.FileUploadParameters{
+									Title:    "result",
+									File:     strb[2],
+									Filetype: "binary",
+									Channels: []string{event.Channel},
+								}
+								file, err := api.UploadFile(params)
+								if err != nil {
+									fmt.Printf("upload error: %s\n", err)
+								}
+								fmt.Printf("upload! Name: %s, URL: %s\n", file.Name, file.URL, file.ID)
+							}
 						case 1:
 						case 2:
+						case 10:
+							_, _, err := api.PostMessage(event.Channel, slack.MsgOptionText("Please specify search words", false))
+							if err != nil {
+								fmt.Printf("failed posting message: %v", err)
+							}
 						}
 					}
 				default:
@@ -123,6 +157,11 @@ func main() {
 	os.Exit(0)
 }
 
+func Exists(filename string) bool {
+	_, err := os.Stat(filename)
+	return err == nil
+}
+
 func validMessage(text, record, result, search string) (string, int) {
 	if strings.Index(text, search) == 0 {
 		stra := strings.Replace(text, search, "", -1)
@@ -131,7 +170,7 @@ func validMessage(text, record, result, search string) (string, int) {
 		}
 		return stra, 0
 	}
-	return "", 10
+	return "", -1
 }
 
 func reLoad(filename string, index *ngram.Index) *ngram.Index {
@@ -157,7 +196,8 @@ func reLoad(filename string, index *ngram.Index) *ngram.Index {
 	return index
 }
 
-func getLines(filename string) int {
+func readText(filename string, sFlag bool) (string, int) {
+	str := ""
 	line := 0
 
 	f, err := os.Open(filename)
@@ -169,6 +209,9 @@ func getLines(filename string) int {
 
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
+		if sFlag == true {
+			str = str + scanner.Text() + "\n"
+		}
 		line++
 	}
 
@@ -178,5 +221,5 @@ func getLines(filename string) int {
 	}
 
 	fmt.Printf("lines: %d\n", line)
-	return line
+	return str, line
 }
