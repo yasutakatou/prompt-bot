@@ -108,6 +108,13 @@ If you want to use **Private channnel**, add the following settings
 
 # usecase
 
+![1](https://github.com/yasutakatou/prompt-bot/assets/22161385/712c0bca-47b9-4dee-8d9d-011ad427198e)
+
+![2](https://github.com/yasutakatou/prompt-bot/assets/22161385/a8e26a03-8d04-47f2-9240-bdf1540bb906)
+
+![3](https://github.com/yasutakatou/prompt-bot/assets/22161385/cc101e0b-8de8-48c4-8366-ab511d968250)
+
+
 # options
 
 ```
