@@ -30,9 +30,9 @@ func init() {
 func main() {
 	_Debug := flag.Bool("debug", false, "[-debug=debug mode (true is enable)]")
 	_Logging := flag.Bool("log", false, "[-log=logging mode (true is enable)]")
-	_Record := flag.String("record", "record", "[-record=These are the words used to register the prompt")
-	_Result := flag.String("result", "result", "[-result=A word that specifies the output of the prompt")
-	_Search := flag.String("search", "search", "[-search=The word when searching for prompts.")
+	_Record := flag.String("record", "record", "[-record=These are the words used to register the prompt]")
+	_Result := flag.String("result", "result", "[-result=A word that specifies the output of the prompt]")
+	_Search := flag.String("search", "search", "[-search=The word when searching for prompts.]")
 	_Ini := flag.String("ini", "prompt-bot.ini", "[-ini=config file name.")
 
 	flag.Parse()
@@ -145,7 +145,7 @@ func main() {
 							}
 						case 1:
 							strc := rejectEscape(event.Text)
-							writePicIni(api, strc, event.Text, str, RandStr(8), *_Ini)
+							writePicIni(api, strc, strings.Replace(event.Text, *_Record, "", -1), str, RandStr(8), *_Ini)
 							index = reLoad(*_Ini, index)
 							_, _, err := api.PostMessage(event.Channel, slack.MsgOptionText("Registered!", false))
 							if err != nil {
@@ -154,7 +154,7 @@ func main() {
 						case 2:
 							strb := strings.Split(str, *_Result)
 							strc := rejectEscape(strb[0])
-							writeTextIni(strc, strb[0], strb[0], RandStr(8), *_Ini)
+							writeTextIni(strc, strb[0], strb[1], RandStr(8), *_Ini)
 							index = reLoad(*_Ini, index)
 							_, _, err := api.PostMessage(event.Channel, slack.MsgOptionText("Registered!", false))
 							if err != nil {
