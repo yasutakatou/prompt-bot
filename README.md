@@ -107,3 +107,44 @@ If you want to use **Private channnel**, add the following settings
 	- run this tool
 
 # usecase
+
+# options
+
+```
+  -debug
+        [-debug=debug mode (true is enable)]
+  -ini string
+        [-ini=config file name. (default "prompt-bot.ini")
+  -log
+        [-log=logging mode (true is enable)]
+  -record string
+        [-record=These are the words used to register the prompt (default "record")
+  -result string
+        [-result=A word that specifies the output of the prompt (default "result")
+  -search string
+        [-search=The word when searching for prompts. (default "search")
+```
+
+## -debug
+
+Run in the mode that outputs various logs.
+
+## -ini string
+
+Specify the configuration file name.
+
+## -log
+
+Specify the log file name.
+
+## -record string
+
+These are the words used to register the prompt (default "record")
+
+## -result string
+
+A word that specifies the output of the prompt (default "result")
+
+## -search string
+
+The word when searching for prompts. (default "search")
