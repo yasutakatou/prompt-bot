@@ -107,8 +107,19 @@ If you want to use **Private channnel**, add the following settings
 	- run this tool
 
 # usecase
+## When registering by text
+
+The prompt and output results are arranged in text, bounded by the words specified in the options record and result.
 
 ![1](https://github.com/yasutakatou/prompt-bot/assets/22161385/712c0bca-47b9-4dee-8d9d-011ad427198e)
+
+The bot will suggest the top-ranking prompts from the fuzzy search results.
+
+![image](https://github.com/yasutakatou/prompt-bot/assets/22161385/b65932cc-ff55-4d91-84ce-c998e80bedda)
+
+## To register the results as an image
+
+
 
 ![2](https://github.com/yasutakatou/prompt-bot/assets/22161385/a8e26a03-8d04-47f2-9240-bdf1540bb906)
 
