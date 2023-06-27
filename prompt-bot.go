@@ -8,6 +8,8 @@ import (
 	"log"
 	"math/rand"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -34,15 +36,38 @@ func main() {
 	_Result := flag.String("result", "result", "[-result=A word that specifies the output of the prompt]")
 	_Search := flag.String("search", "search", "[-search=The word when searching for prompts.]")
 	_Ini := flag.String("ini", "prompt-bot.ini", "[-ini=config file name.")
+	_Dir := flag.String("dir", "data", "[-dir=Directory to store registered information.")
 
 	flag.Parse()
 
 	debug = bool(*_Debug)
 	logging = bool(*_Logging)
 
+	var index *ngram.Index
 	_, count := readText(*_Ini, false)
-	index := ngram.NewIndex(count)
-	index = reLoad(*_Ini, index)
+	if count > 0 {
+		index = ngram.NewIndex(count)
+		index = reLoad(*_Ini, index)
+	}
+
+	Dir := ""
+	prevDir, _ := filepath.Abs(".")
+	if runtime.GOOS == "linux" || runtime.GOOS == "darwin" {
+		Dir = prevDir + "/" + *_Dir + "/"
+	} else {
+		Dir = prevDir + "\\" + *_Dir + "\\"
+	}
+	debugLog("set dir: " + Dir)
+
+	if _, err := os.Stat(Dir); os.IsNotExist(err) {
+		os.Mkdir(Dir, 0777)
+	}
+
+	file, err := os.OpenFile(*_Ini, os.O_WRONLY|os.O_CREATE, 0666)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
 
 	appToken := os.Getenv("SLACK_APP_TOKEN")
 	if appToken == "" {
@@ -100,7 +125,7 @@ func main() {
 					innerEvent := eventsAPIEvent.InnerEvent
 					switch event := innerEvent.Data.(type) {
 					case *slackevents.MessageEvent:
-						fmt.Println("text: " + event.Text)
+						debugLog("text: " + event.Text)
 
 						actualAttachmentJson, err := json.Marshal(event.Files)
 						if err != nil {
@@ -111,65 +136,57 @@ func main() {
 						str, eflag := validMessage(event.Text, *_Record, *_Result, *_Search, mess)
 						switch eflag {
 						case 0:
-							matches := index.FindBestMatch(str)
-							fmt.Printf("matched %s\n", matches)
-							strb := strings.Split(matches, "\t")
-							if strb[3] == "t" {
-								strc, _ := readText(strb[1], true)
-								_, _, err := api.PostMessage(event.Channel, slack.MsgOptionText("prompt\n```\n"+strc+"```\n", false))
-								if err != nil {
-									fmt.Printf("failed posting message: %v", err)
-								}
-								strc, _ = readText(strb[2], true)
-								_, _, err = api.PostMessage(event.Channel, slack.MsgOptionText("result\n```\n"+strc+"```\n", false))
-								if err != nil {
-									fmt.Printf("failed posting message: %v", err)
+							_, count = readText(*_Ini, false)
+							if count > 0 {
+								matches := index.FindBestMatch(str)
+								debugLog("matched: " + matches)
+								strb := strings.Split(matches, "\t")
+								if strb[3] == "t" {
+									strc, _ := readText(strb[1], true)
+									PostMessage(api, event.Channel, "prompt\n```\n"+strc+"```\n")
+									strc, _ = readText(strb[2], true)
+									PostMessage(api, event.Channel, "result\n```\n"+strc+"```\n")
+								} else {
+									strc, _ := readText(strb[1], true)
+									PostMessage(api, event.Channel, "prompt\n```\n"+strc+"```\n")
+									params := slack.FileUploadParameters{
+										Title:    "result",
+										File:     strb[2],
+										Filetype: "binary",
+										Channels: []string{event.Channel},
+									}
+									file, err := api.UploadFile(params)
+									if err != nil {
+										fmt.Printf("upload error: %s\n", err)
+									}
+									fmt.Printf("upload! Name: %s, URL: %s\n", file.Name, file.URL, file.ID)
 								}
 							} else {
-								strc, _ := readText(strb[1], true)
-								_, _, err := api.PostMessage(event.Channel, slack.MsgOptionText("prompt\n```\n"+strc+"```\n", false))
-								if err != nil {
-									fmt.Printf("failed posting message: %v", err)
-								}
-								params := slack.FileUploadParameters{
-									Title:    "result",
-									File:     strb[2],
-									Filetype: "binary",
-									Channels: []string{event.Channel},
-								}
-								file, err := api.UploadFile(params)
-								if err != nil {
-									fmt.Printf("upload error: %s\n", err)
-								}
-								fmt.Printf("upload! Name: %s, URL: %s\n", file.Name, file.URL, file.ID)
+								PostMessage(api, event.Channel, "no index exits!\n")
 							}
 						case 1:
 							strc := rejectEscape(event.Text)
-							writePicIni(api, strc, strings.Replace(event.Text, *_Record, "", -1), str, RandStr(8), *_Ini)
+							writePicIni(api, strc, strings.Replace(event.Text, "\n", "", 1), str, Dir+RandStr(8), *_Ini)
+
+							_, count := readText(*_Ini, false)
+							index = ngram.NewIndex(count)
 							index = reLoad(*_Ini, index)
-							_, _, err := api.PostMessage(event.Channel, slack.MsgOptionText("Registered!", false))
-							if err != nil {
-								fmt.Printf("failed posting message: %v", err)
-							}
+
+							PostMessage(api, event.Channel, "Text & Picture Registered!")
 						case 2:
 							strb := strings.Split(str, *_Result)
 							strc := rejectEscape(strb[0])
-							writeTextIni(strc, strb[0], strb[1], RandStr(8), *_Ini)
+							writeTextIni(strc, strings.Replace(strb[0], "\n", "", 1), strings.Replace(strb[1], "\n", "", 1), Dir+RandStr(8), *_Ini)
+
+							_, count := readText(*_Ini, false)
+							index = ngram.NewIndex(count)
 							index = reLoad(*_Ini, index)
-							_, _, err := api.PostMessage(event.Channel, slack.MsgOptionText("Registered!", false))
-							if err != nil {
-								fmt.Printf("failed posting message: %v", err)
-							}
+
+							PostMessage(api, event.Channel, "Text Source Registered!")
 						case 10:
-							_, _, err := api.PostMessage(event.Channel, slack.MsgOptionText("Please specify search words", false))
-							if err != nil {
-								fmt.Printf("failed posting message: %v", err)
-							}
+							PostMessage(api, event.Channel, "Please specify search words")
 						case 20:
-							_, _, err := api.PostMessage(event.Channel, slack.MsgOptionText("Please specify prompt words", false))
-							if err != nil {
-								fmt.Printf("failed posting message: %v", err)
-							}
+							PostMessage(api, event.Channel, "Please specify prompt words")
 						}
 					}
 				default:
@@ -191,6 +208,14 @@ func rejectEscape(str string) string {
 	stra = strings.Replace(stra, " ", "", -1)
 	stra = strings.Replace(stra, "　", "", -1)
 	return stra
+}
+
+func PostMessage(api *slack.Client, channel, message string) {
+	_, _, err := api.PostMessage(channel, slack.MsgOptionText(message, false))
+	if err != nil {
+		fmt.Printf("failed posting message: %v", err)
+	}
+
 }
 
 func writePicIni(api *slack.Client, indexWord, prompt, url, filename, indexFile string) {
@@ -235,7 +260,7 @@ func writeFile(filename, stra string) bool {
 	}
 	defer file.Close()
 
-	_, err = file.WriteString(stra + "\n")
+	_, err = file.WriteString(stra)
 	if err != nil {
 		fmt.Println(err)
 		return false
@@ -262,13 +287,10 @@ func validMessage(text, record, result, search, mess string) (string, int) {
 		}
 		if strings.Index(mess, "url_private_download") != -1 {
 			strb := strings.Split(mess, "url_private_download")
-			fmt.Println(strb)
 			strc := strings.Split(strb[1], ",")
-			fmt.Println(strc[0])
 			strd := strings.Replace(strc[0], "\"", "", -1)
 			strd = strings.Replace(strd, "\\", "", -1)
 			strd = strings.Replace(strd, ":", "", 1)
-			fmt.Println(strd)
 			return strd, 1
 		}
 	}
@@ -289,7 +311,7 @@ func reLoad(filename string, index *ngram.Index) *ngram.Index {
 	for scanner.Scan() {
 		str := scanner.Text()
 		index.AddString(str)
-		fmt.Println("add Index: " + str)
+		debugLog("add Index: " + str)
 	}
 
 	if err = scanner.Err(); err != nil {
@@ -306,7 +328,7 @@ func readText(filename string, sFlag bool) (string, int) {
 	f, err := os.Open(filename)
 	if err != nil {
 		fmt.Printf("os.Open: %#v\n", err)
-		os.Exit(-1)
+		return "", 0
 	}
 	defer f.Close()
 
@@ -333,4 +355,41 @@ func RandStr(n int) string {
 		b[i] = rs1Letters[rand.Intn(len(rs1Letters))]
 	}
 	return string(b)
+}
+
+func Exists(filename string) bool {
+	_, err := os.Stat(filename)
+	return err == nil
+}
+
+func debugLog(message string) {
+	var file *os.File
+	var err error
+
+	if debug == true {
+		fmt.Println(message)
+	}
+
+	if logging == false {
+		return
+	}
+
+	const layout = "2006-01-02_15"
+	const layout2 = "2006/01/02 15:04:05"
+	t := time.Now()
+	filename := t.Format(layout) + ".log"
+	logHead := "[" + t.Format(layout2) + "] "
+
+	if Exists(filename) == true {
+		file, err = os.OpenFile(filename, os.O_WRONLY|os.O_APPEND, 0666)
+	} else {
+		file, err = os.OpenFile(filename, os.O_WRONLY|os.O_CREATE, 0666)
+	}
+
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+	defer file.Close()
+	fmt.Fprintln(file, logHead+message)
 }
