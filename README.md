@@ -119,9 +119,11 @@ The bot will suggest the top-ranking prompts from the fuzzy search results.
 
 ## To register the results as an image
 
-
+Attached is an image of the resulting output along with a word for prompt registration
 
 ![2](https://github.com/yasutakatou/prompt-bot/assets/22161385/a8e26a03-8d04-47f2-9240-bdf1540bb906)
+
+Here, too, the bot suggests top prompts from ambiguous search results.
 
 ![3](https://github.com/yasutakatou/prompt-bot/assets/22161385/cc101e0b-8de8-48c4-8366-ab511d968250)
 
