@@ -142,11 +142,13 @@ func main() {
 								debugLog("matched: " + matches)
 								strb := strings.Split(matches, "\t")
 								if strb[3] == "t" {
+									debugLog("prompt serch: " + strb[1])
 									strc, _ := readText(strb[1], true)
 									PostMessage(api, event.Channel, "prompt\n```\n"+strc+"```\n")
 									strc, _ = readText(strb[2], true)
 									PostMessage(api, event.Channel, "result\n```\n"+strc+"```\n")
 								} else {
+									debugLog("prompt serch: " + strb[1])
 									strc, _ := readText(strb[1], true)
 									PostMessage(api, event.Channel, "prompt\n```\n"+strc+"```\n")
 									params := slack.FileUploadParameters{
@@ -166,7 +168,9 @@ func main() {
 							}
 						case 1:
 							strc := rejectEscape(event.Text)
-							writePicIni(api, strc, strings.Replace(event.Text, "\n", "", 1), str, Dir+RandStr(8), *_Ini)
+							entryID := RandStr(8)
+							debugLog("prompt entry: " + event.Username + " prompt id: " + entryID)
+							writePicIni(api, strc, strings.Replace(event.Text, "\n", "", 1), str, Dir+entryID, *_Ini)
 
 							_, count := readText(*_Ini, false)
 							index = ngram.NewIndex(count)
@@ -176,7 +180,9 @@ func main() {
 						case 2:
 							strb := strings.Split(str, *_Result)
 							strc := rejectEscape(strb[0])
-							writeTextIni(strc, strings.Replace(strb[0], "\n", "", 1), strings.Replace(strb[1], "\n", "", 1), Dir+RandStr(8), *_Ini)
+							entryID := RandStr(8)
+							debugLog("prompt entry: " + event.Username + " prompt id: " + entryID)
+							writeTextIni(strc, strings.Replace(strb[0], "\n", "", 1), strings.Replace(strb[1], "\n", "", 1), Dir+entryID, *_Ini)
 
 							_, count := readText(*_Ini, false)
 							index = ngram.NewIndex(count)
