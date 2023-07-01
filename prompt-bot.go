@@ -37,6 +37,7 @@ func main() {
 	_Search := flag.String("search", "search", "[-search=The word when searching for prompts.]")
 	_Ini := flag.String("ini", "prompt-bot.ini", "[-ini=config file name.")
 	_Dir := flag.String("dir", "data", "[-dir=Directory to store registered information.")
+	_BotID := flag.String("botid", "U026G2JFYC9", "[-botid=Define IDs for bots to prevent response loops.")
 
 	flag.Parse()
 
@@ -125,19 +126,18 @@ func main() {
 					innerEvent := eventsAPIEvent.InnerEvent
 					switch event := innerEvent.Data.(type) {
 					case *slackevents.MessageEvent:
-						debugLog("text: " + event.Text)
+						if event.User != *_BotID {
+							debugLog("text: " + event.Text)
 
-						actualAttachmentJson, err := json.Marshal(event.Files)
-						if err != nil {
-							fmt.Println("expected no error unmarshaling attachment with blocks, got: %v", err)
-						}
-						mess := string(actualAttachmentJson)
+							actualAttachmentJson, err := json.Marshal(event.Files)
+							if err != nil {
+								fmt.Println("expected no error unmarshaling attachment with blocks, got: %v", err)
+							}
+							mess := string(actualAttachmentJson)
 
-						str, eflag := validMessage(event.Text, *_Record, *_Result, *_Search, mess)
-						switch eflag {
-						case 0:
-							_, count = readText(*_Ini, false)
-							if count > 0 {
+							str, eflag := validMessage(event.Text, *_Record, *_Result, *_Search, mess, *_Ini)
+							switch eflag {
+							case 0:
 								matches := index.FindBestMatch(str)
 								debugLog("matched: " + matches)
 								strb := strings.Split(matches, "\t")
@@ -163,36 +163,38 @@ func main() {
 									}
 									fmt.Printf("upload! Name: %s, URL: %s\n", file.Name, file.URL, file.ID)
 								}
-							} else {
-								PostMessage(api, event.Channel, "no index exits!\n")
+							case 1:
+								strc := rejectEscape(event.Text)
+								entryID := RandStr(8)
+								debugLog("prompt entry: " + event.Username + " prompt id: " + entryID)
+								writePicIni(api, strc, strings.Replace(event.Text, "\n", "", 1), str, Dir+entryID, *_Ini)
+
+								_, count := readText(*_Ini, false)
+								index = ngram.NewIndex(count)
+								index = reLoad(*_Ini, index)
+
+								PostMessage(api, event.Channel, "Text & Picture Registered!")
+							case 2:
+								strb := strings.Split(str, *_Result)
+								strc := rejectEscape(strb[0])
+								entryID := RandStr(8)
+								debugLog("prompt entry: " + event.Username + " prompt id: " + entryID)
+								writeTextIni(strc, strings.Replace(strb[0], "\n", "", 1), strings.Replace(strb[1], "\n", "", 1), Dir+entryID, *_Ini)
+
+								_, count := readText(*_Ini, false)
+								index = ngram.NewIndex(count)
+								index = reLoad(*_Ini, index)
+
+								PostMessage(api, event.Channel, "Text Source Registered!")
+							case 10:
+								PostMessage(api, event.Channel, "Please specify search words")
+							case 20:
+								//PostMessage(api, event.Channel, "Please specify prompt words")
+							case 30:
+								PostMessage(api, event.Channel, "That prompt is already registered.")
+							case 40:
+								PostMessage(api, event.Channel, "no index exits!")
 							}
-						case 1:
-							strc := rejectEscape(event.Text)
-							entryID := RandStr(8)
-							debugLog("prompt entry: " + event.Username + " prompt id: " + entryID)
-							writePicIni(api, strc, strings.Replace(event.Text, "\n", "", 1), str, Dir+entryID, *_Ini)
-
-							_, count := readText(*_Ini, false)
-							index = ngram.NewIndex(count)
-							index = reLoad(*_Ini, index)
-
-							PostMessage(api, event.Channel, "Text & Picture Registered!")
-						case 2:
-							strb := strings.Split(str, *_Result)
-							strc := rejectEscape(strb[0])
-							entryID := RandStr(8)
-							debugLog("prompt entry: " + event.Username + " prompt id: " + entryID)
-							writeTextIni(strc, strings.Replace(strb[0], "\n", "", 1), strings.Replace(strb[1], "\n", "", 1), Dir+entryID, *_Ini)
-
-							_, count := readText(*_Ini, false)
-							index = ngram.NewIndex(count)
-							index = reLoad(*_Ini, index)
-
-							PostMessage(api, event.Channel, "Text Source Registered!")
-						case 10:
-							PostMessage(api, event.Channel, "Please specify search words")
-						case 20:
-							PostMessage(api, event.Channel, "Please specify prompt words")
 						}
 					}
 				default:
@@ -274,8 +276,13 @@ func writeFile(filename, stra string) bool {
 	return true
 }
 
-func validMessage(text, record, result, search, mess string) (string, int) {
-	if strings.Index(text, search) == 0 {
+func validMessage(text, record, result, search, mess, inifile string) (string, int) {
+	fmt.Println(text)
+	if strings.Index(text, search+" ") == 0 {
+		_, count := readText(inifile, false)
+		if count == 0 {
+			return "", 40
+		}
 		stra := strings.Replace(text, search, "", -1)
 		if len(stra) < 1 {
 			return "", 10
@@ -288,6 +295,26 @@ func validMessage(text, record, result, search, mess string) (string, int) {
 		if len(stra) < 1 {
 			return "", 20
 		}
+		if checkSamePromt(stra, inifile) == true {
+			return "", 30
+		}
+		if strings.Index(stra, result+"\n") != -1 {
+			return stra, 2
+		}
+	}
+
+	if strings.Index("このメッセージにはインタラクティブ要素が含まれます", text) == -1 {
+		//"event":{"type":"message","text":"\u3053\u306e\u30e1\u30c3\u30bb\u30fc\u30b8\u306b\u306f\u30a4\u30f3\u30bf\u30e9\u30af\u30c6\u30a3\u30d6\u8981\u7d20\u304c\u542b\u307e\u308c\u307e\u3059\u3002"
+		//"files":[{"id":"F05FV4XKWQY","created":1688210619,"timestamp":1688210619,"name":"image.png","title":"image.png","mimetype":"image\/png","filetype":"png","pretty_type":"PNG","user":"U024ZT3BHU5","user_team":"T024W6FDUKG","editable":false,"size":1016,"mode":"hosted","is_external":false,"external_type":"","is_public":true,"public_url_shared":false,"display_as_bot":false,"username":"","url_private":"https:\/\/files.slack.com\/files-pri\/T024W6FDUKG-F05FV4XKWQY\/image.png","url_private_download":"https:\/\/files.slack.com\/files-pri\/T024W6FDUKG-F05FV4XKWQY\/download\/image.png","media_display_type":"unknown","thumb_64":"https:\/\/files.slack.com\/files-tmb\/T024W6FDUKG-F05FV4XKWQY-f4fedd55b4\/image_64.png","thumb_80":"https:\/\/files.slack.com\/files-tmb\/T024W6FDUKG-F05FV4XKWQY-f4fedd55b4\/image_80.png","thumb_360":"https:\/\/files.slack.com\/files-tmb\/T024W6FDUKG-F05FV4XKWQY-f4fedd55b4\/image_360.png","thumb_360_w":134,"thumb_360_h":53,"thumb_160":"https:\/\/files.slack.com\/files-tmb\/T024W6FDUKG-F05FV4XKWQY-f4fedd55b4\/image_160.png","original_w":134,"original_h":53,"thumb_tiny":"AwASADDRkyUIBI+lMG\/advHP8XpinyDcuOfwqMo5jYKdhJ4xQAZlx1HtSgy5Odp44pqxyhyTISMdM07bIBw3PvzQA5S+fm249qfkUi5A+Y5NLmgAooooAKKKKACiiigD\/9k=","permalink":"https:\/\/5-iab3526.slack.com\/files\/U024ZT3BHU5\/F05FV4XKWQY\/image.png","permalink_public":"https:\/\/slack-files.com\/T024W6FDUKG-F05FV4XKWQY-c14409118a","has_rich_preview":false,"file_access":"visible"}],"upload":false,"user":"U024ZT3BHU5","display_as_bot":false,"ts":"1688210623.400079","blocks":[{"type":"rich_text","block_id":"JX5er",
+		//"elements":[{"type":"rich_text_section","elements":[{"type":"text","text":"record\nExplain antibiotics\nA:"}]}]}],"client_msg_id":"8c1c8ca4-2f31-42e3-85a4-42a48698ce01","channel":"C0252VAF0N6","subtype":"file_share","event_ts":"1688210623.400079","channel_type":"channel"},"type":"event_callback","event_id":"Ev05EQT3K1P1","event_time":1688210623,"authorizations":[{"enterprise_id":null,"team_id":"T024W6FDUKG","user_id":"U026G2JFYC9","is_bot":true,"is_enterprise_install":false}],"is_ext_shared_channel":false,"event_context":"4-eyJldCI6Im1lc3NhZ2UiLCJ0aWQiOiJUMDI0VzZGRFVLRyIsImFpZCI6IkEwMjVXS0xOR0xFIiwiY2lkIjoiQzAyNTJWQUYwTjYifQ"},"type":"events_api","accepts_response_payload":false,"retry_attempt":0,"retry_reason":""}
+		fmt.Println(mess)
+		stra := strings.Replace(text, record, "", -1)
+		if len(stra) < 1 {
+			return "", 20
+		}
+		if checkSamePromt(stra, inifile) == true {
+			return "", 30
+		}
 		if strings.Index(stra, result+"\n") != -1 {
 			return stra, 2
 		}
@@ -299,9 +326,38 @@ func validMessage(text, record, result, search, mess string) (string, int) {
 			strd = strings.Replace(strd, ":", "", 1)
 			return strd, 1
 		}
+
 	}
 
 	return "", -1
+}
+
+func checkSamePromt(prompt, inifile string) bool {
+	str := rejectEscape(prompt)
+	fmt.Println(str)
+	f, err := os.Open(inifile)
+	if err != nil {
+		fmt.Printf("os.Open: %#v\n", err)
+		os.Exit(-1)
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		strb := scanner.Text()
+		strc := strings.Split(strb, "\t")
+		if strings.Index(str, strc[0]) == 0 {
+			return true
+		}
+		fmt.Println(strc[0])
+	}
+
+	if err = scanner.Err(); err != nil {
+		fmt.Printf("scanner.Err: %#v\n", err)
+		os.Exit(-1)
+	}
+
+	return false
 }
 
 func reLoad(filename string, index *ngram.Index) *ngram.Index {
