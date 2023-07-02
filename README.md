@@ -131,23 +131,47 @@ Here, too, the bot suggests top prompts from ambiguous search results.
 # options
 
 ```
+  -botid string
+        [-botid=Define IDs for bots to prevent response loops. (default "U026G2JFYC9")
   -debug
         [-debug=debug mode (true is enable)]
+  -dir string
+        [-dir=Directory to store registered information. (default "data")
   -ini string
         [-ini=config file name. (default "prompt-bot.ini")
   -log
         [-log=logging mode (true is enable)]
   -record string
-        [-record=These are the words used to register the prompt (default "record")
+        [-record=These are the words used to register the prompt] (default "record")
   -result string
-        [-result=A word that specifies the output of the prompt (default "result")
+        [-result=A word that specifies the output of the prompt] (default "result")
   -search string
-        [-search=The word when searching for prompts. (default "search")
+        [-search=The word when searching for prompts.] (default "search")
+  -threshold string
+        [-threshold=Threshold for best matching sentences.] (default "0.2")
 ```
+
+## -botid
+
+Option to define the bot's own ID<br>
+<br>
+note) Define bots not to respond to their own posts.<br>
+<br>
+![image](https://github.com/yasutakatou/prompt-bot/assets/22161385/b6a9972f-420e-40c8-a885-0d7bb5f00ed8)
+
+```
+https://app.slack.com/team/U026G2JFYC9
+```
+
+**U026G2JFYC9** is bot ID.
 
 ## -debug
 
 Run in the mode that outputs various logs.
+
+## -dir
+
+Output directory for various data.
 
 ## -ini string
 
@@ -168,3 +192,15 @@ A word that specifies the output of the prompt (default "result")
 ## -search string
 
 The word when searching for prompts. (default "search")
+
+## -threshold string
+
+Criterion value for determining similarity<br>
+<br>
+note) The lower the similarity, the less likely it is to be a candidate.<br>
+
+# License
+MIT License
+
+
+##
