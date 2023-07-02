@@ -107,6 +107,16 @@ If you want to use **Private channnel**, add the following settings
 	- run this tool
 
 # usecase
+
+There are three major uses<br>
+1) Register prompts and output results in text.<br>
+2) Register prompts as text and output results as images.<br>
+3) Search prompts with natural language processing.<br>
+<br>
+In other words, prompt sharing can be achieved on a company-wide basis by applying this bot across the board!<br>
+<br>
+note) It would be interesting to visualize the use of AI by aggregating the most used prompts or most searched people from the usage history logs<br>
+
 ## When registering by text
 
 The prompt and output results are arranged in text, bounded by the words specified in the options record and result.
