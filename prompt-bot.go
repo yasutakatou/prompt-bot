@@ -120,22 +120,22 @@ func main() {
 				}
 
 				client.Ack(*evt.Request)
+				actualAttachmentJson, err := json.Marshal(*evt.Request)
+				if err != nil {
+					fmt.Println("expected no error unmarshaling attachment with blocks, got: %v", err)
+				}
+				mess := string(actualAttachmentJson)
 
 				switch eventsAPIEvent.Type {
 				case slackevents.CallbackEvent:
 					innerEvent := eventsAPIEvent.InnerEvent
+
 					switch event := innerEvent.Data.(type) {
 					case *slackevents.MessageEvent:
 						if event.User != *_BotID {
 							debugLog("text: " + event.Text)
 
-							actualAttachmentJson, err := json.Marshal(event.Files)
-							if err != nil {
-								fmt.Println("expected no error unmarshaling attachment with blocks, got: %v", err)
-							}
-							mess := string(actualAttachmentJson)
-
-							str, _, eflag := validMessage(event.Text, *_Record, *_Result, *_Search, mess, *_Ini)
+							str, strr, eflag := validMessage(event.Text, *_Record, *_Result, *_Search, mess, *_Ini)
 							switch eflag {
 							case 0:
 								matches := index.FindBestMatch(str)
@@ -164,10 +164,10 @@ func main() {
 									fmt.Printf("upload! Name: %s, URL: %s\n", file.Name, file.URL, file.ID)
 								}
 							case 1:
-								strc := rejectEscape(event.Text)
+								strc := rejectEscape(str)
 								entryID := RandStr(8)
 								debugLog("prompt entry: " + event.Username + " prompt id: " + entryID)
-								writePicIni(api, strc, strings.Replace(event.Text, "\n", "", 1), str, Dir+entryID, *_Ini)
+								writePicIni(api, strings.Replace(strc, "\n", "", 1), strings.Replace(str, "\n", "", 1), strr, Dir+entryID, *_Ini)
 
 								_, count := readText(*_Ini, false)
 								index = ngram.NewIndex(count)
@@ -186,14 +186,10 @@ func main() {
 								index = reLoad(*_Ini, index)
 
 								PostMessage(api, event.Channel, "Text Source Registered!")
-							case 10:
-								PostMessage(api, event.Channel, "Please specify search words")
-							case 20:
-								//PostMessage(api, event.Channel, "Please specify prompt words")
-							case 30:
-								PostMessage(api, event.Channel, "That prompt is already registered.")
-							case 40:
-								PostMessage(api, event.Channel, "no index exits!")
+							case -1:
+								if len(str) > 0 {
+									PostMessage(api, event.Channel, str)
+								}
 							}
 						}
 					}
@@ -211,10 +207,10 @@ func main() {
 }
 
 func rejectEscape(str string) string {
-	stra := strings.Replace(str, "\n", "", -1)
-	stra = strings.Replace(stra, "\t", "", -1)
-	stra = strings.Replace(stra, " ", "", -1)
+	stra := strings.Replace(str, " ", "", -1)
 	stra = strings.Replace(stra, "　", "", -1)
+	stra = strings.Replace(str, "\n", "", -1)
+	stra = strings.Replace(stra, "\t", "", -1)
 	return stra
 }
 
@@ -277,16 +273,14 @@ func writeFile(filename, stra string) bool {
 }
 
 func validMessage(text, record, result, search, mess, inifile string) (string, string, int) {
-	fmt.Println("mess:")
-	fmt.Println(mess)
 	if strings.Index(text, search+" ") == 0 {
 		_, count := readText(inifile, false)
 		if count == 0 {
-			return "", "", 40
+			return "no index exits!", "", -1
 		}
 		stra := strings.Replace(text, search, "", -1)
 		if len(stra) < 1 {
-			return "", "", 10
+			return "Please specify search words", "", -1
 		}
 		return stra, "", 0
 	}
@@ -294,10 +288,10 @@ func validMessage(text, record, result, search, mess, inifile string) (string, s
 	if strings.Index(text, record) == 0 {
 		stra := strings.Replace(text, record, "", -1)
 		if len(stra) < 1 {
-			return "", "", 20
+			return "Please specify prompt words", "", -1
 		}
 		if checkSamePromt(stra, inifile) == true {
-			return "", "", 30
+			return "That prompt is already registered", "", -1
 		}
 		if strings.Index(stra, result+"\n") != -1 {
 			return stra, "", 2
@@ -305,38 +299,28 @@ func validMessage(text, record, result, search, mess, inifile string) (string, s
 	}
 
 	if strings.Index("このメッセージにはインタラクティブ要素が含まれます", text) == -1 {
-		fmt.Println(mess)
-		stra := strings.Replace(text, record, "", -1)
+		strb := strings.Split(mess, "url_private_download")
+		strc := strings.Split(strb[1], ",")
+		strd := strings.Replace(strc[0], "\"", "", -1)
+		strd = strings.Replace(strd, "\\", "", -1)
+		strd = strings.Replace(strd, ":", "", 1)
+		debugLog("file url: " + strd)
+
+		stre := strings.Split(mess, "rich_text_section")
+		strf := strings.Split(stre[1], "text")
+		strg := strings.Replace(strf[2], "\":", "", -1)
+		strh := strings.Replace(strings.Split(strg, "}")[0], "\"", "", -1)
+		strh = strings.Replace(strh, "\\n", "", -1)
+
+		stra := strings.Replace(strh, record, "", -1)
+		debugLog("rich Text: " + stra)
 		if len(stra) < 1 {
-			return "", "", 20
+			return "Please specify prompt words", "", -1
 		}
 		if checkSamePromt(stra, inifile) == true {
-			return "", "", 30
+			return "That prompt is already registered", "", -1
 		}
-		if strings.Index(stra, result+"\n") != -1 {
-			return stra, "", 2
-		}
-		if strings.Index(mess, "url_private_download") != -1 {
-			strb := strings.Split(mess, "url_private_download")
-			strc := strings.Split(strb[1], ",")
-			strd := strings.Replace(strc[0], "\"", "", -1)
-			strd = strings.Replace(strd, "\\", "", -1)
-			strd = strings.Replace(strd, ":", "", 1)
-			fmt.Println(strd)
-
-			fmt.Println("rich_text_section")
-			stre := strings.Split(mess, "rich_text_section")
-			fmt.Println(stre)
-			strf := strings.Split(stre[1], "text")
-			strg := strings.Split(strf[1], ",")
-			strh := strings.Replace(strg[1], "\"", "", -1)
-			//strh = strings.Replace(strh, "\\", "", -1)
-			//strh = strings.Replace(strh, ":", "", 1)
-			fmt.Println(strd)
-			fmt.Println(strh)
-			return strd, strh, 1
-		}
-
+		return stra, strd, 1
 	}
 
 	return "", "", -1
