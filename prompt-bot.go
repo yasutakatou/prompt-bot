@@ -10,10 +10,11 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
-	"github.com/lestrrat-go/ngram"
+	"github.com/Lazin/go-ngram"
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
 	"github.com/slack-go/slack/socketmode"
@@ -35,6 +36,7 @@ func main() {
 	_Record := flag.String("record", "record", "[-record=These are the words used to register the prompt]")
 	_Result := flag.String("result", "result", "[-result=A word that specifies the output of the prompt]")
 	_Search := flag.String("search", "search", "[-search=The word when searching for prompts.]")
+	_threshold := flag.String("threshold", "0.2", "[-threshold=Threshold for best matching sentences.]")
 	_Ini := flag.String("ini", "prompt-bot.ini", "[-ini=config file name.")
 	_Dir := flag.String("dir", "data", "[-dir=Directory to store registered information.")
 	_BotID := flag.String("botid", "U026G2JFYC9", "[-botid=Define IDs for bots to prevent response loops.")
@@ -44,10 +46,12 @@ func main() {
 	debug = bool(*_Debug)
 	logging = bool(*_Logging)
 
-	var index *ngram.Index
+	thre, _ := strconv.ParseFloat(*_threshold, 64)
+
+	var index *ngram.NGramIndex
 	_, count := readText(*_Ini, false)
 	if count > 0 {
-		index = ngram.NewIndex(count)
+		index, _ = ngram.NewNGramIndex(ngram.SetN(count))
 		index = reLoad(*_Ini, index)
 	}
 
@@ -125,6 +129,7 @@ func main() {
 					fmt.Println("expected no error unmarshaling attachment with blocks, got: %v", err)
 				}
 				mess := string(actualAttachmentJson)
+				fmt.Println(mess)
 
 				switch eventsAPIEvent.Type {
 				case slackevents.CallbackEvent:
@@ -138,30 +143,40 @@ func main() {
 							str, strr, eflag := validMessage(event.Text, *_Record, *_Result, *_Search, mess, *_Ini)
 							switch eflag {
 							case 0:
-								matches := index.FindBestMatch(str)
-								debugLog("matched: " + matches)
-								strb := strings.Split(matches, "\t")
-								if strb[3] == "t" {
-									debugLog("prompt serch: " + strb[1])
-									strc, _ := readText(strb[1], true)
-									PostMessage(api, event.Channel, "prompt\n```\n"+strc+"```\n")
-									strc, _ = readText(strb[2], true)
-									PostMessage(api, event.Channel, "result\n```\n"+strc+"```\n")
+								debugLog("search word: " + str)
+								matches, err := index.BestMatch(str, thre)
+								if err != nil {
+									fmt.Println(err)
 								} else {
-									debugLog("prompt serch: " + strb[1])
-									strc, _ := readText(strb[1], true)
-									PostMessage(api, event.Channel, "prompt\n```\n"+strc+"```\n")
-									params := slack.FileUploadParameters{
-										Title:    "result",
-										File:     strb[2],
-										Filetype: "binary",
-										Channels: []string{event.Channel},
-									}
-									file, err := api.UploadFile(params)
+									strc, err := index.GetString(matches.TokenID)
 									if err != nil {
-										fmt.Printf("upload error: %s\n", err)
+										fmt.Println(err)
+									} else {
+										debugLog("matched: " + strc)
+										strb := strings.Split(strc, "\t")
+										if strb[3] == "t" {
+											debugLog("[result text] prompt serch: " + strb[0])
+											strc, _ := readText(strb[1], true)
+											PostMessage(api, event.Channel, "prompt\n```\n"+strc+"```\n")
+											strc, _ = readText(strb[2], true)
+											PostMessage(api, event.Channel, "result\n```\n"+strc+"```\n")
+										} else {
+											debugLog("[result picture] prompt serch: " + strb[0])
+											strc, _ := readText(strb[1], true)
+											PostMessage(api, event.Channel, "prompt\n```\n"+strc+"```\n")
+											params := slack.FileUploadParameters{
+												Title:    "result",
+												File:     strb[2],
+												Filetype: "binary",
+												Channels: []string{event.Channel},
+											}
+											file, err := api.UploadFile(params)
+											if err != nil {
+												fmt.Printf("upload error: %s\n", err)
+											}
+											fmt.Printf("upload! Name: %s, URL: %s\n", file.Name, file.URL, file.ID)
+										}
 									}
-									fmt.Printf("upload! Name: %s, URL: %s\n", file.Name, file.URL, file.ID)
 								}
 							case 1:
 								strc := rejectEscape(str)
@@ -170,7 +185,7 @@ func main() {
 								writePicIni(api, strings.Replace(strc, "\n", "", 1), strings.Replace(str, "\n", "", 1), strr, Dir+entryID, *_Ini)
 
 								_, count := readText(*_Ini, false)
-								index = ngram.NewIndex(count)
+								index, _ = ngram.NewNGramIndex(ngram.SetN(count))
 								index = reLoad(*_Ini, index)
 
 								PostMessage(api, event.Channel, "Text & Picture Registered!")
@@ -182,7 +197,7 @@ func main() {
 								writeTextIni(strc, strings.Replace(strb[0], "\n", "", 1), strings.Replace(strb[1], "\n", "", 1), Dir+entryID, *_Ini)
 
 								_, count := readText(*_Ini, false)
-								index = ngram.NewIndex(count)
+								index, _ = ngram.NewNGramIndex(ngram.SetN(count))
 								index = reLoad(*_Ini, index)
 
 								PostMessage(api, event.Channel, "Text Source Registered!")
@@ -298,8 +313,10 @@ func validMessage(text, record, result, search, mess, inifile string) (string, s
 		}
 	}
 
-	if strings.Index("このメッセージにはインタラクティブ要素が含まれます", text) == -1 {
+	if strings.Index("url_private_download", mess) != -1 && strings.Index("rich_text_section", mess) != -1 && len(text) > 1 {
 		strb := strings.Split(mess, "url_private_download")
+		fmt.Println("url_private_download")
+		fmt.Println(mess)
 		strc := strings.Split(strb[1], ",")
 		strd := strings.Replace(strc[0], "\"", "", -1)
 		strd = strings.Replace(strd, "\\", "", -1)
@@ -356,7 +373,7 @@ func checkSamePromt(prompt, inifile string) bool {
 	return false
 }
 
-func reLoad(filename string, index *ngram.Index) *ngram.Index {
+func reLoad(filename string, index *ngram.NGramIndex) *ngram.NGramIndex {
 	fp, err := os.Open(filename)
 	if err != nil {
 		fmt.Printf("os.Open: %#v\n", err)
@@ -368,7 +385,7 @@ func reLoad(filename string, index *ngram.Index) *ngram.Index {
 
 	for scanner.Scan() {
 		str := scanner.Text()
-		index.AddString(str)
+		index.Add(str)
 		debugLog("add Index: " + str)
 	}
 
@@ -392,10 +409,13 @@ func readText(filename string, sFlag bool) (string, int) {
 
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
-		if sFlag == true {
-			str = str + scanner.Text() + "\n"
+		strb := scanner.Text()
+		if len(strb) > 1 {
+			if sFlag == true {
+				str = str + strb + "\n"
+			}
+			line++
 		}
-		line++
 	}
 
 	if err = scanner.Err(); err != nil {
