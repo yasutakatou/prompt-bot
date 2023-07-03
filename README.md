@@ -5,6 +5,7 @@
 
 I'd like to use ChatGPT internally to promote prompt engineering. But I don't know how to **manage company-wide** prompts...<br>
 With the current mix of remote workers and those who come to work, the **Chat tool should be utilized as a hub of communication**.<br>
+And because it's a Slack bot, it can be used from a smartphone!<br>
 I tried to code such a thought!<br>
 
 # Feature
@@ -109,9 +110,11 @@ If you want to use **Private channnel**, add the following settings
 # usecase
 
 There are three major uses<br>
-1) Register prompts and output results in text.<br>
-2) Register prompts as text and output results as images.<br>
-3) Search prompts with natural language processing.<br>
+1) Register prompts and output results in **text**.<br>
+2) Register prompts as **text and output results as images**.<br>
+3) **Search** prompts with natural language processing.<br>
+<br>
+note) Deletion is not supported. Because we haven't come up with an easy-to-understand deletion method.<br>
 <br>
 In other words, prompt sharing can be achieved on a company-wide basis by applying this bot across the board!<br>
 <br>
@@ -119,17 +122,17 @@ note) It would be interesting to visualize the use of AI by aggregating the most
 
 ## When registering by text
 
-The prompt and output results are arranged in text, bounded by the words specified in the options record and result.
+The prompt and output results are arranged in text, bounded by the words specified in the **options record and result**.
 
 ![1](https://github.com/yasutakatou/prompt-bot/assets/22161385/712c0bca-47b9-4dee-8d9d-011ad427198e)
 
-The bot will suggest the top-ranking prompts from the fuzzy search results.
+The bot will suggest the top-ranking prompts from ngram search results.
 
 ![image](https://github.com/yasutakatou/prompt-bot/assets/22161385/b65932cc-ff55-4d91-84ce-c998e80bedda)
 
 ## To register the results as an image
 
-Attached is an image of the resulting output along with a word for prompt registration
+**Attached is an image** of the resulting output along with a word for prompt registration.
 
 ![2](https://github.com/yasutakatou/prompt-bot/assets/22161385/a8e26a03-8d04-47f2-9240-bdf1540bb906)
 
