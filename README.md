@@ -118,7 +118,7 @@ note) Deletion is not supported. Because we haven't come up with an easy-to-unde
 <br>
 In other words, prompt sharing can be achieved on a company-wide basis by applying this bot across the board!<br>
 <br>
-note) It would be interesting to visualize the use of AI by aggregating the most used prompts or most searched people from the usage history logs<br>
+note) It would be interesting to visualize the use of AI by aggregating the **most used prompts or most searched people from the usage history logs**.　You should honor its users.<br>
 
 ## When registering by text
 
