@@ -261,7 +261,8 @@ func writePicIni(api *slack.Client, indexWord, prompt, url, filename, indexFile 
 		log.Fatal(err)
 	}
 	defer file.Close()
-	fmt.Fprintln(file, indexWord+"\t"+filename+"_prompt"+"\t"+filename+"_result"+"\t"+"p")
+	str := fmt.Sprintf("%s", indexWord)
+	fmt.Fprintln(file, str+"\t"+filename+"_prompt"+"\t"+filename+"_result"+"\t"+"p")
 }
 
 func writeTextIni(indexWord, prompt, result, filename, indexfile string) {
@@ -273,7 +274,8 @@ func writeTextIni(indexWord, prompt, result, filename, indexfile string) {
 		log.Fatal(err)
 	}
 	defer file.Close()
-	fmt.Fprintln(file, indexWord+"\t"+filename+"_prompt"+"\t"+filename+"_result"+"\t"+"t")
+	str := fmt.Sprintf("%s", indexWord)
+	fmt.Fprintln(file, str+"\t"+filename+"_prompt"+"\t"+filename+"_result"+"\t"+"t")
 }
 
 func writeFile(filename, stra string) bool {
