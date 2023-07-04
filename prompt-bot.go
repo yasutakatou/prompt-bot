@@ -35,11 +35,15 @@ func main() {
 	_Logging := flag.Bool("log", false, "[-log=logging mode (true is enable)]")
 	_Record := flag.String("record", "record", "[-record=These are the words used to register the prompt]")
 	_Result := flag.String("result", "result", "[-result=A word that specifies the output of the prompt]")
-	_Search := flag.String("search", "search", "[-search=The word when searching for prompts.]")
 	_threshold := flag.String("threshold", "0.2", "[-threshold=Threshold for best matching sentences.]")
 	_Ini := flag.String("ini", "prompt-bot.ini", "[-ini=config file name.")
 	_Dir := flag.String("dir", "data", "[-dir=Directory to store registered information.")
 	_BotID := flag.String("botid", "U026G2JFYC9", "[-botid=Define IDs for bots to prevent response loops.")
+	// Search Type
+	_like := flag.String("like", "like", "[-like=The word when searching for prompts.]")
+	_like3 := flag.String("like3", "like3", "[-like3=The word when searching for prompts.]")
+	_match := flag.String("match", "match", "[-match=The word when searching for prompts.]")
+	_match3 := flag.String("match3", "match3", "[-match3=The word when searching for prompts.]")
 
 	flag.Parse()
 
@@ -52,7 +56,7 @@ func main() {
 	_, count := readText(*_Ini, false)
 	if count > 0 {
 		index, _ = ngram.NewNGramIndex(ngram.SetN(count))
-		index = reLoad(*_Ini, index)
+		index = reLoad(*_Ini, count)
 	}
 
 	Dir := ""
@@ -108,6 +112,7 @@ func main() {
 	)
 
 	go func() {
+		fmt.Println(client)
 		for evt := range client.Events {
 			switch evt.Type {
 			case socketmode.EventTypeConnecting:
@@ -129,7 +134,6 @@ func main() {
 					fmt.Println("expected no error unmarshaling attachment with blocks, got: %v", err)
 				}
 				mess := string(actualAttachmentJson)
-				fmt.Println(mess)
 
 				switch eventsAPIEvent.Type {
 				case slackevents.CallbackEvent:
@@ -140,9 +144,10 @@ func main() {
 						if event.User != *_BotID {
 							debugLog("text: " + event.Text)
 
-							str, strr, eflag := validMessage(event.Text, *_Record, *_Result, *_Search, mess, *_Ini)
+							str, strr, eflag := validMessage(event.Text, *_Record, *_Result, *_like, *_like3, *_match, *_match3, mess, *_Ini)
+
 							switch eflag {
-							case 0:
+							case 10:
 								debugLog("search word: " + str)
 								matches, err := index.BestMatch(str, thre)
 								if err != nil {
@@ -186,7 +191,7 @@ func main() {
 
 								_, count := readText(*_Ini, false)
 								index, _ = ngram.NewNGramIndex(ngram.SetN(count))
-								index = reLoad(*_Ini, index)
+								index = reLoad(*_Ini, count)
 
 								PostMessage(api, event.Channel, "Text & Picture Registered!")
 							case 2:
@@ -198,7 +203,7 @@ func main() {
 
 								_, count := readText(*_Ini, false)
 								index, _ = ngram.NewNGramIndex(ngram.SetN(count))
-								index = reLoad(*_Ini, index)
+								index = reLoad(*_Ini, count)
 
 								PostMessage(api, event.Channel, "Text Source Registered!")
 							case -1:
@@ -287,33 +292,8 @@ func writeFile(filename, stra string) bool {
 	return true
 }
 
-func validMessage(text, record, result, search, mess, inifile string) (string, string, int) {
-	if strings.Index(text, search+" ") == 0 {
-		_, count := readText(inifile, false)
-		if count == 0 {
-			return "no index exits!", "", -1
-		}
-		stra := strings.Replace(text, search, "", -1)
-		if len(stra) < 1 {
-			return "Please specify search words", "", -1
-		}
-		return stra, "", 0
-	}
-
-	if strings.Index(text, record) == 0 {
-		stra := strings.Replace(text, record, "", -1)
-		if len(stra) < 1 {
-			return "Please specify prompt words", "", -1
-		}
-		if checkSamePromt(stra, inifile) == true {
-			return "That prompt is already registered", "", -1
-		}
-		if strings.Index(stra, result+"\n") != -1 {
-			return stra, "", 2
-		}
-	}
-
-	if strings.Index("url_private_download", mess) != -1 && strings.Index("rich_text_section", mess) != -1 && len(text) > 1 {
+func validMessage(text, record, result, like, like3, match, match3, mess, inifile string) (string, string, int) {
+	if strings.Index(mess, "url_private_download") != -1 && strings.Index(mess, "rich_text_section") != -1 && len(text) > 1 {
 		strb := strings.Split(mess, "url_private_download")
 		fmt.Println("url_private_download")
 		fmt.Println(mess)
@@ -340,12 +320,52 @@ func validMessage(text, record, result, search, mess, inifile string) (string, s
 		return stra, strd, 1
 	}
 
+	if strings.Index(text, record) == 0 {
+		stra := strings.Replace(text, record, "", -1)
+		if len(stra) < 1 {
+			return "Please specify prompt words", "", -1
+		}
+		if checkSamePromt(stra, inifile) == true {
+			return "That prompt is already registered", "", -1
+		}
+		if strings.Index(stra, result+"\n") != -1 {
+			return stra, "", 2
+		}
+	}
+
+	sFlag := 0
+	var stra string
+
+	if strings.Index(text, like+" ") == 0 {
+		sFlag = 10
+		stra = strings.Replace(text, like, "", -1)
+	} else if strings.Index(text, like3+" ") == 0 {
+		sFlag = 11
+		stra = strings.Replace(text, like3, "", -1)
+	} else if strings.Index(text, match+" ") == 0 {
+		sFlag = 12
+		stra = strings.Replace(text, match, "", -1)
+	} else if strings.Index(text, match3+" ") == 0 {
+		sFlag = 13
+		stra = strings.Replace(text, match3, "", -1)
+	}
+
+	if sFlag > 0 {
+		_, count := readText(inifile, false)
+		if count == 0 {
+			return "no index exits!", "", -1
+		}
+		if len(stra) < 1 {
+			return "Please specify search words", "", -1
+		}
+		return stra, "", 0
+	}
+
 	return "", "", -1
 }
 
 func checkSamePromt(prompt, inifile string) bool {
 	str := rejectEscape(prompt)
-	fmt.Println(str)
 	f, err := os.Open(inifile)
 	if err != nil {
 		fmt.Printf("os.Open: %#v\n", err)
@@ -358,11 +378,8 @@ func checkSamePromt(prompt, inifile string) bool {
 		strb := scanner.Text()
 		strc := strings.Split(strb, "\t")
 		if strings.Index(str, strc[0]) == 0 {
-			fmt.Println(str)
-			fmt.Println(strc[0])
 			return true
 		}
-		fmt.Println(strc[0])
 	}
 
 	if err = scanner.Err(); err != nil {
@@ -373,7 +390,9 @@ func checkSamePromt(prompt, inifile string) bool {
 	return false
 }
 
-func reLoad(filename string, index *ngram.NGramIndex) *ngram.NGramIndex {
+func reLoad(filename string, count int) *ngram.NGramIndex {
+	index, _ := ngram.NewNGramIndex(ngram.SetN(count))
+
 	fp, err := os.Open(filename)
 	if err != nil {
 		fmt.Printf("os.Open: %#v\n", err)
