@@ -44,6 +44,7 @@ func main() {
 	_like3 := flag.String("like3", "like3", "[-like3=The word when searching for prompts.]")
 	_match := flag.String("match", "match", "[-match=The word when searching for prompts.]")
 	_match3 := flag.String("match3", "match3", "[-match3=The word when searching for prompts.]")
+	_Gramsize := flag.Int("Gramsize", 3, "[-Gramsize=N (gram size) to NGramIndex c-tor.]")
 
 	flag.Parse()
 
@@ -55,8 +56,8 @@ func main() {
 	var index *ngram.NGramIndex
 	_, count := readText(*_Ini, false)
 	if count > 0 {
-		index, _ = ngram.NewNGramIndex(ngram.SetN(count))
-		index = reLoad(*_Ini, count)
+		index, _ = ngram.NewNGramIndex(ngram.SetN(*_Gramsize))
+		index = reLoad(*_Ini, count, *_Gramsize)
 	}
 
 	Dir := ""
@@ -148,7 +149,7 @@ func main() {
 
 							switch eflag {
 							case 10:
-								debugLog("search word: " + str)
+								debugLog("like search word: " + str)
 								matches, err := index.BestMatch(str, thre)
 								if err != nil {
 									fmt.Println(err)
@@ -158,40 +159,49 @@ func main() {
 										fmt.Println(err)
 									} else {
 										debugLog("matched: " + strc)
-										strb := strings.Split(strc, "\t")
-										if strb[3] == "t" {
-											debugLog("[result text] prompt serch: " + strb[0])
-											strc, _ := readText(strb[1], true)
-											PostMessage(api, event.Channel, "prompt\n```\n"+strc+"```\n")
-											strc, _ = readText(strb[2], true)
-											PostMessage(api, event.Channel, "result\n```\n"+strc+"```\n")
+										answerSwitch(api, strc, event.Channel)
+									}
+								}
+							case 11:
+								debugLog("like3 search word: " + str)
+								matches, err := index.Search(str, thre)
+								fmt.Println(matches)
+								if err != nil {
+									fmt.Println(err)
+								} else {
+									cnt := len(matches)
+									if cnt >= 3 {
+										cnt = 3
+									}
+									for i := 0; i < cnt; i++ {
+										s := strconv.Itoa(i)
+										strc, err := index.GetString(matches[i].TokenID)
+										if err != nil {
+											fmt.Println(err)
 										} else {
-											debugLog("[result picture] prompt serch: " + strb[0])
-											strc, _ := readText(strb[1], true)
-											PostMessage(api, event.Channel, "prompt\n```\n"+strc+"```\n")
-											params := slack.FileUploadParameters{
-												Title:    "result",
-												File:     strb[2],
-												Filetype: "binary",
-												Channels: []string{event.Channel},
-											}
-											file, err := api.UploadFile(params)
-											if err != nil {
-												fmt.Printf("upload error: %s\n", err)
-											}
-											fmt.Printf("upload! Name: %s, URL: %s\n", file.Name, file.URL, file.ID)
+											debugLog(s + " matched: " + strc)
+											answerSwitch(api, "["+s+"]"+strc, event.Channel)
 										}
 									}
+								}
+							case 12:
+								debugLog("match search word: " + str)
+								strs := matchSearch(*_Ini, str)
+								if len(strs) > 0 {
+									debugLog("matched: " + strs[0])
+									answerSwitch(api, strs[0], event.Channel)
+								} else {
+									PostMessage(api, event.Channel, "no hit!")
 								}
 							case 1:
 								strc := rejectEscape(str)
 								entryID := RandStr(8)
 								debugLog("prompt entry: " + event.Username + " prompt id: " + entryID)
-								writePicIni(api, strings.Replace(strc, "\n", "", 1), strings.Replace(str, "\n", "", 1), strr, Dir+entryID, *_Ini)
+								writePicIni(api, entryID, strings.Replace(strc, "\n", "", 1), strings.Replace(str, "\n", "", 1), strr, Dir+entryID, *_Ini)
 
 								_, count := readText(*_Ini, false)
-								index, _ = ngram.NewNGramIndex(ngram.SetN(count))
-								index = reLoad(*_Ini, count)
+								index, _ = ngram.NewNGramIndex(ngram.SetN(*_Gramsize))
+								index = reLoad(*_Ini, count, *_Gramsize)
 
 								PostMessage(api, event.Channel, "Text & Picture Registered!")
 							case 2:
@@ -199,11 +209,11 @@ func main() {
 								strc := rejectEscape(strb[0])
 								entryID := RandStr(8)
 								debugLog("prompt entry: " + event.Username + " prompt id: " + entryID)
-								writeTextIni(strc, strings.Replace(strb[0], "\n", "", 1), strings.Replace(strb[1], "\n", "", 1), Dir+entryID, *_Ini)
+								writeTextIni(entryID, strc, strings.Replace(strb[0], "\n", "", 1), strings.Replace(strb[1], "\n", "", 1), Dir+entryID, *_Ini)
 
 								_, count := readText(*_Ini, false)
-								index, _ = ngram.NewNGramIndex(ngram.SetN(count))
-								index = reLoad(*_Ini, count)
+								index, _ = ngram.NewNGramIndex(ngram.SetN(*_Gramsize))
+								index = reLoad(*_Ini, count, *_Gramsize)
 
 								PostMessage(api, event.Channel, "Text Source Registered!")
 							case -1:
@@ -226,6 +236,111 @@ func main() {
 	os.Exit(0)
 }
 
+func multiWordSerch(str, words string) bool {
+	var strb []string
+	if strings.Index(words, " ") != -1 {
+		strb = strings.Split(words, " ")
+	} else if strings.Index(words, "　") != -1 {
+		strb = strings.Split(words, "　")
+	} else {
+		strb = append(strb, words)
+	}
+
+	wFlag := true
+	for i := 0; i < len(strb); i++ {
+		if strings.Index(str, strb[i]) == -1 {
+			wFlag = false
+			break
+		}
+	}
+	return wFlag
+}
+
+func matchSearch(filename, word string) []string {
+	buff := readTextArray(filename)
+	var result []string
+
+	rand.Seed(time.Now().Unix())
+	alls := len(buff)
+	rnd := rand.Intn(len(buff))
+	if rnd >= (alls / 2) {
+		result = uploop(rnd, alls, buff, word)
+	} else {
+		result = downloop(rnd, alls, buff, word)
+	}
+	return result
+}
+
+func uploop(rnd, alls int, buff []string, word string) []string {
+	var result []string
+
+	cnt := alls
+	for i := rnd; i < len(buff); i++ {
+		if multiWordSerch(buff[i], word) == true {
+			result = append(result, buff[i])
+		}
+		cnt = cnt - 1
+	}
+
+	for i := 0; i < cnt; i++ {
+		if multiWordSerch(buff[i], word) == true {
+			result = append(result, buff[i])
+		}
+	}
+	return result
+}
+
+func downloop(rnd, alls int, buff []string, word string) []string {
+	var result []string
+
+	i := rnd
+	if rnd > 0 {
+		for {
+			if multiWordSerch(buff[i], word) == true {
+				result = append(result, buff[i])
+			}
+			i = i - 1
+			if i == -1 {
+				break
+			}
+		}
+	}
+
+	count := alls - rnd - 1
+	for i := 0; i < count; i++ {
+		if multiWordSerch(buff[alls-i-1], word) == true {
+			result = append(result, buff[alls-i-1])
+		}
+	}
+	return result
+}
+
+func readTextArray(filename string) []string {
+	var buff []string
+
+	f, err := os.Open(filename)
+	if err != nil {
+		fmt.Printf("os.Open: %#v\n", err)
+		return buff
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		strb := scanner.Text()
+		if len(strb) > 1 {
+			buff = append(buff, strb)
+		}
+	}
+
+	if err = scanner.Err(); err != nil {
+		fmt.Printf("scanner.Err: %#v\n", err)
+		os.Exit(-1)
+	}
+
+	return buff
+}
+
 func rejectEscape(str string) string {
 	stra := strings.Replace(str, " ", "", -1)
 	stra = strings.Replace(stra, "　", "", -1)
@@ -242,8 +357,34 @@ func PostMessage(api *slack.Client, channel, message string) {
 
 }
 
-func writePicIni(api *slack.Client, indexWord, prompt, url, filename, indexFile string) {
-	writeFile(filename+"_prompt", prompt)
+func answerSwitch(api *slack.Client, strc, channelID string) {
+	strb := strings.Split(strc, "\t")
+	if strb[3] == "t" {
+		debugLog("[result text] prompt serch: " + strb[0])
+		strc, _ := readText(strb[1], true)
+		PostMessage(api, channelID, "prompt\n```\n"+strc+"```\n")
+		strc, _ = readText(strb[2], true)
+		PostMessage(api, channelID, "result\n```\n"+strc+"```\n")
+	} else {
+		debugLog("[result picture] prompt serch: " + strb[0])
+		strc, _ := readText(strb[1], true)
+		PostMessage(api, channelID, "prompt\n```\n"+strc+"```\n")
+		params := slack.FileUploadParameters{
+			Title:    "result",
+			File:     strb[2],
+			Filetype: "binary",
+			Channels: []string{channelID},
+		}
+		file, err := api.UploadFile(params)
+		if err != nil {
+			fmt.Printf("upload error: %s\n", err)
+		}
+		fmt.Printf("upload! Name: %s, URL: %s\n", file.Name, file.URL, file.ID)
+	}
+}
+
+func writePicIni(api *slack.Client, entryID, indexWord, prompt, url, filename, indexFile string) {
+	writeFile(filename+"_prompt", entryID+"\n"+prompt)
 
 	f, err := os.Create(filename + "_result")
 	defer f.Close()
@@ -261,11 +402,12 @@ func writePicIni(api *slack.Client, indexWord, prompt, url, filename, indexFile 
 		log.Fatal(err)
 	}
 	defer file.Close()
-	fmt.Fprintln(file, indexWord+"\t"+filename+"_prompt"+"\t"+filename+"_result"+"\t"+"p")
+	str := fmt.Sprintf("%s", indexWord)
+	fmt.Fprintln(file, str+"\t"+filename+"_prompt"+"\t"+filename+"_result"+"\t"+"p")
 }
 
-func writeTextIni(indexWord, prompt, result, filename, indexfile string) {
-	writeFile(filename+"_prompt", prompt)
+func writeTextIni(entryID, indexWord, prompt, result, filename, indexfile string) {
+	writeFile(filename+"_prompt", entryID+"\n"+prompt)
 	writeFile(filename+"_result", result)
 
 	file, err := os.OpenFile(indexfile, os.O_WRONLY|os.O_APPEND, 0666)
@@ -273,7 +415,8 @@ func writeTextIni(indexWord, prompt, result, filename, indexfile string) {
 		log.Fatal(err)
 	}
 	defer file.Close()
-	fmt.Fprintln(file, indexWord+"\t"+filename+"_prompt"+"\t"+filename+"_result"+"\t"+"t")
+	str := fmt.Sprintf("%s", indexWord)
+	fmt.Fprintln(file, str+"\t"+filename+"_prompt"+"\t"+filename+"_result"+"\t"+"t")
 }
 
 func writeFile(filename, stra string) bool {
@@ -358,7 +501,7 @@ func validMessage(text, record, result, like, like3, match, match3, mess, inifil
 		if len(stra) < 1 {
 			return "Please specify search words", "", -1
 		}
-		return stra, "", 0
+		return stra, "", sFlag
 	}
 
 	return "", "", -1
@@ -390,8 +533,8 @@ func checkSamePromt(prompt, inifile string) bool {
 	return false
 }
 
-func reLoad(filename string, count int) *ngram.NGramIndex {
-	index, _ := ngram.NewNGramIndex(ngram.SetN(count))
+func reLoad(filename string, count, Gramsize int) *ngram.NGramIndex {
+	index, _ := ngram.NewNGramIndex(ngram.SetN(Gramsize))
 
 	fp, err := os.Open(filename)
 	if err != nil {
