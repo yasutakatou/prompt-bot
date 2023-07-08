@@ -45,6 +45,7 @@ func main() {
 	_match := flag.String("match", "match", "[-match=The word when searching for prompts.]")
 	_match3 := flag.String("match3", "match3", "[-match3=The word when searching for prompts.]")
 	_Gramsize := flag.Int("Gramsize", 3, "[-Gramsize=N (gram size) to NGramIndex c-tor.]")
+	_top := flag.Int("top", 3, "[-top=Change to a number other than TOP 3.]")
 
 	flag.Parse()
 
@@ -113,7 +114,6 @@ func main() {
 	)
 
 	go func() {
-		fmt.Println(client)
 		for evt := range client.Events {
 			switch evt.Type {
 			case socketmode.EventTypeConnecting:
@@ -145,7 +145,9 @@ func main() {
 						if event.User != *_BotID {
 							debugLog("text: " + event.Text)
 
-							str, strr, eflag := validMessage(event.Text, *_Record, *_Result, *_like, *_like3, *_match, *_match3, mess, *_Ini)
+							astr, astrr, eflag := validMessage(event.Text, *_Record, *_Result, *_like, *_like3, *_match, *_match3, mess, *_Ini)
+							str := string(astr)
+							strr := string(astrr)
 
 							switch eflag {
 							case 10:
@@ -153,6 +155,7 @@ func main() {
 								matches, err := index.BestMatch(str, thre)
 								if err != nil {
 									fmt.Println(err)
+									PostMessage(api, event.Channel, "no hit!")
 								} else {
 									strc, err := index.GetString(matches.TokenID)
 									if err != nil {
@@ -165,23 +168,27 @@ func main() {
 							case 11:
 								debugLog("like3 search word: " + str)
 								matches, err := index.Search(str, thre)
-								fmt.Println(matches)
 								if err != nil {
 									fmt.Println(err)
 								} else {
 									cnt := len(matches)
-									if cnt >= 3 {
-										cnt = 3
+									if cnt >= *_top {
+										cnt = *_top
 									}
-									for i := 0; i < cnt; i++ {
-										s := strconv.Itoa(i)
-										strc, err := index.GetString(matches[i].TokenID)
-										if err != nil {
-											fmt.Println(err)
-										} else {
-											debugLog(s + " matched: " + strc)
-											answerSwitch(api, "["+s+"]"+strc, event.Channel)
+									if cnt > 0 {
+										for i := 0; i < cnt; i++ {
+											s := strconv.Itoa(i + 1)
+											strc, err := index.GetString(matches[i].TokenID)
+											if err != nil {
+												fmt.Println(err)
+											} else {
+												debugLog(s + " matched: " + strc)
+												PostMessage(api, event.Channel, "answer ["+s+"]")
+												answerSwitch(api, strc, event.Channel)
+											}
 										}
+									} else {
+										PostMessage(api, event.Channel, "no hit!")
 									}
 								}
 							case 12:
@@ -192,6 +199,31 @@ func main() {
 									answerSwitch(api, strs[0], event.Channel)
 								} else {
 									PostMessage(api, event.Channel, "no hit!")
+								}
+							case 13:
+								debugLog("match3 search word: " + str)
+								strs := matchSearch(*_Ini, str)
+								if err != nil {
+									fmt.Println(err)
+								} else {
+									cnt := len(strs)
+									if cnt >= *_top {
+										cnt = *_top
+									}
+									if cnt > 0 {
+										for i := 0; i < cnt; i++ {
+											s := strconv.Itoa(i + 1)
+											if err != nil {
+												fmt.Println(err)
+											} else {
+												debugLog(s + " matched: " + strs[i])
+												PostMessage(api, event.Channel, "answer ["+s+"]")
+												answerSwitch(api, strs[i], event.Channel)
+											}
+										}
+									} else {
+										PostMessage(api, event.Channel, "no hit!")
+									}
 								}
 							case 1:
 								strc := rejectEscape(str)
@@ -438,29 +470,27 @@ func writeFile(filename, stra string) bool {
 func validMessage(text, record, result, like, like3, match, match3, mess, inifile string) (string, string, int) {
 	if strings.Index(mess, "url_private_download") != -1 && strings.Index(mess, "rich_text_section") != -1 && len(text) > 1 {
 		strb := strings.Split(mess, "url_private_download")
-		fmt.Println("url_private_download")
-		fmt.Println(mess)
 		strc := strings.Split(strb[1], ",")
 		strd := strings.Replace(strc[0], "\"", "", -1)
 		strd = strings.Replace(strd, "\\", "", -1)
 		strd = strings.Replace(strd, ":", "", 1)
 		debugLog("file url: " + strd)
 
-		stre := strings.Split(mess, "rich_text_section")
-		strf := strings.Split(stre[1], "text")
-		strg := strings.Replace(strf[2], "\":", "", -1)
-		strh := strings.Replace(strings.Split(strg, "}")[0], "\"", "", -1)
-		strh = strings.Replace(strh, "\\n", "", -1)
+		// stre := strings.Split(mess, "rich_text_section")
+		// strf := strings.Split(stre[1], "text")
+		// strg := strings.Replace(strf[2], "\":", "", -1)
+		// strh := strings.Replace(strings.Split(strg, "}")[0], "\"", "", -1)
+		// strh = strings.Replace(strh, "\\n", "", -1)
 
-		stra := strings.Replace(strh, record, "", -1)
-		debugLog("rich Text: " + stra)
-		if len(stra) < 1 {
+		// stra := strings.Replace(strh, record, "", -1)
+		// debugLog("rich Text: " + string(stra))
+		if len(text) < 1 {
 			return "Please specify prompt words", "", -1
 		}
-		if checkSamePromt(stra, inifile) == true {
+		if checkSamePromt(text, inifile) == true {
 			return "That prompt is already registered", "", -1
 		}
-		return stra, strd, 1
+		return string(text), string(strd), 1
 	}
 
 	if strings.Index(text, record) == 0 {
@@ -472,23 +502,23 @@ func validMessage(text, record, result, like, like3, match, match3, mess, inifil
 			return "That prompt is already registered", "", -1
 		}
 		if strings.Index(stra, result+"\n") != -1 {
-			return stra, "", 2
+			return string(stra), "", 2
 		}
 	}
 
 	sFlag := 0
 	var stra string
 
-	if strings.Index(text, like+" ") == 0 {
+	if strings.Index(text, like+" ") == 0 || strings.Index(text, like+"　") == 0 {
 		sFlag = 10
 		stra = strings.Replace(text, like, "", -1)
-	} else if strings.Index(text, like3+" ") == 0 {
+	} else if strings.Index(text, like3+" ") == 0 || strings.Index(text, like3+"　") == 0 {
 		sFlag = 11
 		stra = strings.Replace(text, like3, "", -1)
-	} else if strings.Index(text, match+" ") == 0 {
+	} else if strings.Index(text, match+" ") == 0 || strings.Index(text, match+"　") == 0 {
 		sFlag = 12
 		stra = strings.Replace(text, match, "", -1)
-	} else if strings.Index(text, match3+" ") == 0 {
+	} else if strings.Index(text, match3+" ") == 0 || strings.Index(text, match3+"　") == 0 {
 		sFlag = 13
 		stra = strings.Replace(text, match3, "", -1)
 	}
@@ -548,7 +578,7 @@ func reLoad(filename string, count, Gramsize int) *ngram.NGramIndex {
 	for scanner.Scan() {
 		str := scanner.Text()
 		index.Add(str)
-		debugLog("add Index: " + str)
+		//debugLog("add Index: " + str)
 	}
 
 	if err = scanner.Err(); err != nil {
