@@ -134,12 +134,21 @@ The bot will suggest the top-ranking prompts from ngram search results.
 
 **Attached is an image** of the resulting output along with a word for prompt registration.
 
-![2](https://github.com/yasutakatou/prompt-bot/assets/22161385/a8e26a03-8d04-47f2-9240-bdf1540bb906)
+![1](https://github.com/yasutakatou/prompt-bot/assets/22161385/b967e745-7aff-4653-a120-22c18810d5da)
 
 Here, too, the bot suggests top prompts from ambiguous search results.
 
-![3](https://github.com/yasutakatou/prompt-bot/assets/22161385/cc101e0b-8de8-48c4-8366-ab511d968250)
+![2](https://github.com/yasutakatou/prompt-bot/assets/22161385/e3fc165a-54a4-49cd-aa83-1c1b0fbc09f8)
 
+## Output usage reports
+
+There is the ability to periodically go back through the messages and **tally the reactions to the prompts**.
+
+![3](https://github.com/yasutakatou/prompt-bot/assets/22161385/5731112e-3e08-44b5-919f-2e34236df7d8)
+
+This would also stimulate organizational use by recognizing those who have posted the best prompts based on the number of reactions they have received, or those who have added the most reactions (i.e., those who are making the most use of the prompts)!
+
+![4](https://github.com/yasutakatou/prompt-bot/assets/22161385/b3fd005d-1318-4796-ab31-676f6bfed45c)
 
 # options
 
