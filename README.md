@@ -140,6 +140,22 @@ Here, too, the bot suggests top prompts from ambiguous search results.
 
 ![2](https://github.com/yasutakatou/prompt-bot/assets/22161385/e3fc165a-54a4-49cd-aa83-1c1b0fbc09f8)
 
+## search
+
+Four search methods are available.<br>
+
+- **ambiguous search(n-gram)**
+- **Ambiguous search that returns multiple results(n-gram)**
+- **Static word search**
+- **Static word search returning multiple outputs**
+
+**Specify the word you want to search for by inserting a space between the command words for the search as shown below.**
+
+![image](https://github.com/yasutakatou/prompt-bot/assets/22161385/27a7e49f-b3bc-40f9-98be-12a671864917)
+
+note) The command word for the search can be changed by the startup options.<br>
+note) The number of instructions for multiple outputs can also be changed by the startup options.<br>
+
 ## Output usage reports
 
 There is the ability to periodically go back through the messages and **tally the reactions to the prompts**.
