@@ -144,25 +144,49 @@ Here, too, the bot suggests top prompts from ambiguous search results.
 # options
 
 ```
+  -Gramsize int
+        [-Gramsize=N (gram size) to NGramIndex c-tor.] (default 3)
   -botid string
         [-botid=Define IDs for bots to prevent response loops. (default "U026G2JFYC9")
   -debug
         [-debug=debug mode (true is enable)]
   -dir string
         [-dir=Directory to store registered information. (default "data")
+  -historySize int
+        [-historySize=Specify the number of statements to look back on channel usage.] (default 100)
   -ini string
         [-ini=config file name. (default "prompt-bot.ini")
+  -like string
+        [-like=The word when searching for prompts.] (default "like")
+  -like3 string
+        [-like3=The word when searching for prompts.] (default "like3")
   -log
         [-log=logging mode (true is enable)]
+  -loop int
+        [-loop=The interval at which periodic usage reports are output.] (default 24)
+  -match string
+        [-match=The word when searching for prompts.] (default "match")
+  -match3 string
+        [-match3=The word when searching for prompts.] (default "match3")
+  -noreport
+        [-debug=Put it in a mode that does not output periodic usage reports.]
   -record string
         [-record=These are the words used to register the prompt] (default "record")
+  -reportChannel string
+        [-reportChannel=Specify which channels to output periodic usage reports.] (default "XXXXXXXX")
   -result string
         [-result=A word that specifies the output of the prompt] (default "result")
-  -search string
-        [-search=The word when searching for prompts.] (default "search")
   -threshold string
         [-threshold=Threshold for best matching sentences.] (default "0.2")
+  -top int
+        [-top=Change to a number other than TOP 3.] (default 3)
 ```
+
+## -Gramsize
+
+N (gram size) to NGramIndex c-tor. (default 3)<br>
+<br>
+note) If you make it too big, it will crash due to memory error. 3 is good.<br>
 
 ## -botid
 
@@ -186,31 +210,69 @@ Run in the mode that outputs various logs.
 
 Output directory for various data.
 
-## -ini string
+## -historySize
+
+Specify the number of statements to look back on channel usage.<br>
+<br>
+note) If the daily search volume amounts to several hundred searches, please increase it.<br>
+
+## -ini
 
 Specify the configuration file name.
+
+## -like
+
+Prompt to invoke an ambiguous search(n-gram).
+
+##  -like3
+
+Prompt for returning multiple fuzzy searchh(n-gram) results.
 
 ## -log
 
 Specify the log file name.
 
-## -record string
+## -loop
+
+The interval at which periodic usage reports are output. (default 24 Hour)
+
+## -match
+
+Prompt for static word search.
+
+## -match3
+
+Prompt for multiple static word searches.
+
+## -noreport
+
+Put it in a mode that does not output periodic usage reports.
+
+## -record
 
 These are the words used to register the prompt (default "record")
+
+## -reportChannel
+
+Specify which channels to output periodic usage reports.
+
+![image](https://github.com/yasutakatou/prompt-bot/assets/22161385/57b4d590-046b-4905-812a-f490a9fa503d)
 
 ## -result string
 
 A word that specifies the output of the prompt (default "result")
-
-## -search string
-
-The word when searching for prompts. (default "search")
 
 ## -threshold string
 
 Criterion value for determining similarity<br>
 <br>
 note) The lower the similarity, the less likely it is to be a candidate.<br>
+
+## -top
+
+Change to a number other than TOP 3.<br>
+<br>
+If you change this, it is recommended that you also change the prompt name for multiple searches.<br>
 
 # License
 MIT License
