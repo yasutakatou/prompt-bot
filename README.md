@@ -283,11 +283,10 @@ Specify which channels to output periodic usage reports.
 
 ![image](https://github.com/yasutakatou/prompt-bot/assets/22161385/57b4d590-046b-4905-812a-f490a9fa503d)
 
-## -result string
-
+## -result
 A word that specifies the output of the prompt (default "result")
 
-## -threshold string
+## -threshold
 
 Criterion value for determining similarity<br>
 <br>
