@@ -55,7 +55,7 @@ func main() {
 	_Gramsize := flag.Int("Gramsize", 3, "[-Gramsize=N (gram size) to NGramIndex c-tor.]")
 	_top := flag.Int("top", 3, "[-top=Change to a number other than TOP 3.]")
 	_loop := flag.Int("loop", 24, "[-loop=The interval at which periodic usage reports are output.]")
-	_noreport := flag.Bool("noreport", false, "[-debug=Put it in a mode that does not output periodic usage reports.]")
+	_noreport := flag.Bool("noreport", false, "[-noreport=Put it in a mode that does not output periodic usage reports.]")
 	_reportChannel := flag.String("reportChannel", "XXXXXXXX", "[-reportChannel=Specify which channels to output periodic usage reports.]")
 	_historySize := flag.Int("historySize", 100, "[-historySize=Specify the number of statements to look back on channel usage.]")
 
