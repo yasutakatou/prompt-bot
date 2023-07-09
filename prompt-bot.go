@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -20,10 +21,17 @@ import (
 	"github.com/slack-go/slack/socketmode"
 )
 
+type promptAction struct {
+	ID     string
+	USER   string
+	ACTION string
+}
+
 var (
 	debug      bool
 	logging    bool
 	rs1Letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+	actions    []promptAction
 )
 
 func init() {
@@ -46,6 +54,10 @@ func main() {
 	_match3 := flag.String("match3", "match3", "[-match3=The word when searching for prompts.]")
 	_Gramsize := flag.Int("Gramsize", 3, "[-Gramsize=N (gram size) to NGramIndex c-tor.]")
 	_top := flag.Int("top", 3, "[-top=Change to a number other than TOP 3.]")
+	_loop := flag.Int("loop", 24, "[-loop=The interval at which periodic usage reports are output.]")
+	_noreport := flag.Bool("noreport", false, "[-debug=Put it in a mode that does not output periodic usage reports.]")
+	_reportChannel := flag.String("reportChannel", "XXXXXXXX", "[-reportChannel=Specify which channels to output periodic usage reports.]")
+	_historySize := flag.Int("historySize", 100, "[-historySize=Specify the number of statements to look back on channel usage.]")
 
 	flag.Parse()
 
@@ -55,7 +67,7 @@ func main() {
 	thre, _ := strconv.ParseFloat(*_threshold, 64)
 
 	var index *ngram.NGramIndex
-	_, count := readText(*_Ini, false)
+	_, count := readText(*_Ini, false, false)
 	if count > 0 {
 		index, _ = ngram.NewNGramIndex(ngram.SetN(*_Gramsize))
 		index = reLoad(*_Ini, count, *_Gramsize)
@@ -162,7 +174,7 @@ func main() {
 										fmt.Println(err)
 									} else {
 										debugLog("matched: " + strc)
-										answerSwitch(api, strc, event.Channel)
+										answerSwitch(api, strc, event.Channel, Dir)
 									}
 								}
 							case 11:
@@ -184,7 +196,7 @@ func main() {
 											} else {
 												debugLog(s + " matched: " + strc)
 												PostMessage(api, event.Channel, "answer ["+s+"]")
-												answerSwitch(api, strc, event.Channel)
+												answerSwitch(api, strc, event.Channel, Dir)
 											}
 										}
 									} else {
@@ -196,7 +208,7 @@ func main() {
 								strs := matchSearch(*_Ini, str)
 								if len(strs) > 0 {
 									debugLog("matched: " + strs[0])
-									answerSwitch(api, strs[0], event.Channel)
+									answerSwitch(api, strs[0], event.Channel, Dir)
 								} else {
 									PostMessage(api, event.Channel, "no hit!")
 								}
@@ -218,7 +230,7 @@ func main() {
 											} else {
 												debugLog(s + " matched: " + strs[i])
 												PostMessage(api, event.Channel, "answer ["+s+"]")
-												answerSwitch(api, strs[i], event.Channel)
+												answerSwitch(api, strs[i], event.Channel, Dir)
 											}
 										}
 									} else {
@@ -231,7 +243,7 @@ func main() {
 								debugLog("prompt entry: " + event.Username + " prompt id: " + entryID)
 								writePicIni(api, entryID, strings.Replace(strc, "\n", "", 1), strings.Replace(str, "\n", "", 1), strr, Dir+entryID, *_Ini)
 
-								_, count := readText(*_Ini, false)
+								_, count := readText(*_Ini, false, false)
 								index, _ = ngram.NewNGramIndex(ngram.SetN(*_Gramsize))
 								index = reLoad(*_Ini, count, *_Gramsize)
 
@@ -243,7 +255,7 @@ func main() {
 								debugLog("prompt entry: " + event.Username + " prompt id: " + entryID)
 								writeTextIni(entryID, strc, strings.Replace(strb[0], "\n", "", 1), strings.Replace(strb[1], "\n", "", 1), Dir+entryID, *_Ini)
 
-								_, count := readText(*_Ini, false)
+								_, count := readText(*_Ini, false, false)
 								index, _ = ngram.NewNGramIndex(ngram.SetN(*_Gramsize))
 								index = reLoad(*_Ini, count, *_Gramsize)
 
@@ -263,9 +275,72 @@ func main() {
 			}
 		}
 	}()
-	client.Run()
+	go client.Run()
 
+	var timeLock float64
+	var nowStr string
+
+	for {
+		if *_noreport == false {
+			const layout = "15:04:05"
+			t := time.Now()
+			nowTime := strings.Split(t.Format(layout), ":")[0]
+			debugLog("nowTime: " + nowTime)
+
+			params := slack.GetConversationHistoryParameters{ChannelID: *_reportChannel, Limit: *_historySize}
+			messages, err := api.GetConversationHistory(&params)
+			if err != nil {
+				fmt.Printf("incident not get: %s\n", err)
+				return
+			}
+
+			tFlag := false
+			rFlag := false
+			if Exists("prompt-bot.lock") {
+				strs, _ := readText("prompt-bot.lock", true, true)
+				tFlag = true
+				timeLock, _ = strconv.ParseFloat(strs, 64)
+			}
+
+			for _, message := range messages.Messages {
+				nowLock, _ := strconv.ParseFloat(message.Timestamp, 64)
+				if tFlag == true {
+					if nowLock < timeLock {
+						break
+					}
+				}
+				if rFlag == false {
+					nowStr = message.Timestamp
+					rFlag = true
+				}
+				if strings.Index(message.Text, "prompt ") == 0 {
+					strs := strings.Split(message.Text, "```")
+					strb := strings.Replace(strs[0], "\n", "", -1)
+					strb = strings.Replace(strb, "prompt ", "", -1)
+					debugLog("prompt [" + strb + "]")
+					checkReaction(api, message.Reactions, strb)
+				}
+			}
+			writeFile("prompt-bot.lock", nowStr, true)
+			if len(actions) > 0 {
+				portActionReport(api, *_reportChannel)
+			}
+
+			time.Sleep(time.Hour * time.Duration(*_loop))
+		}
+	}
 	os.Exit(0)
+}
+
+func portActionReport(api *slack.Client, channel string) {
+	debugLog("reporting: " + channel)
+	strs := "```\n"
+	for i := 0; i < len(actions); i++ {
+		strs = strs + actions[i].ID + "," + actions[i].USER + "," + actions[i].ACTION + "\n"
+	}
+	strs = strs + "```\n"
+	PostMessage(api, channel, strs)
+	actions = nil
 }
 
 func multiWordSerch(str, words string) bool {
@@ -389,21 +464,22 @@ func PostMessage(api *slack.Client, channel, message string) {
 
 }
 
-func answerSwitch(api *slack.Client, strc, channelID string) {
+func answerSwitch(api *slack.Client, strc, channelID, Dir string) {
 	strb := strings.Split(strc, "\t")
-	if strb[3] == "t" {
-		debugLog("[result text] prompt serch: " + strb[0])
-		strc, _ := readText(strb[1], true)
-		PostMessage(api, channelID, "prompt\n```\n"+strc+"```\n")
-		strc, _ = readText(strb[2], true)
+
+	if checkFileTypeText(Dir+strb[1]+"_result") == true {
+		debugLog("[result text] prompt serch: " + strb[1])
+		strc, _ := readText(Dir+strb[1]+"_prompt", true, false)
+		PostMessage(api, channelID, "prompt "+strb[1]+"\n```\n"+strc+"```\n")
+		strc, _ = readText(Dir+strb[1]+"_result", true, false)
 		PostMessage(api, channelID, "result\n```\n"+strc+"```\n")
 	} else {
-		debugLog("[result picture] prompt serch: " + strb[0])
-		strc, _ := readText(strb[1], true)
-		PostMessage(api, channelID, "prompt\n```\n"+strc+"```\n")
+		debugLog("[result picture] prompt serch: " + strb[1])
+		strc, _ := readText(Dir+strb[1]+"_prompt", true, false)
+		PostMessage(api, channelID, "prompt "+strb[1]+"\n```\n"+strc+"```\n")
 		params := slack.FileUploadParameters{
 			Title:    "result",
-			File:     strb[2],
+			File:     Dir + strb[1] + "_result",
 			Filetype: "binary",
 			Channels: []string{channelID},
 		}
@@ -415,8 +491,23 @@ func answerSwitch(api *slack.Client, strc, channelID string) {
 	}
 }
 
+func checkFileTypeText(filename string) bool {
+	bytes, err := os.ReadFile(filename)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	mimeType := http.DetectContentType(bytes)
+	debugLog(filename + " : is  " + string(mimeType))
+
+	if strings.Index(string(mimeType), "text") != -1 {
+		return true
+	}
+	return false
+}
+
 func writePicIni(api *slack.Client, entryID, indexWord, prompt, url, filename, indexFile string) {
-	writeFile(filename+"_prompt", entryID+"\n"+prompt)
+	writeFile(filename+"_prompt", prompt, false)
 
 	f, err := os.Create(filename + "_result")
 	defer f.Close()
@@ -435,12 +526,12 @@ func writePicIni(api *slack.Client, entryID, indexWord, prompt, url, filename, i
 	}
 	defer file.Close()
 	str := fmt.Sprintf("%s", indexWord)
-	fmt.Fprintln(file, str+"\t"+filename+"_prompt"+"\t"+filename+"_result"+"\t"+"p")
+	fmt.Fprintln(file, str+"\t"+entryID)
 }
 
 func writeTextIni(entryID, indexWord, prompt, result, filename, indexfile string) {
-	writeFile(filename+"_prompt", entryID+"\n"+prompt)
-	writeFile(filename+"_result", result)
+	writeFile(filename+"_prompt", prompt, false)
+	writeFile(filename+"_result", result, false)
 
 	file, err := os.OpenFile(indexfile, os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
@@ -448,11 +539,19 @@ func writeTextIni(entryID, indexWord, prompt, result, filename, indexfile string
 	}
 	defer file.Close()
 	str := fmt.Sprintf("%s", indexWord)
-	fmt.Fprintln(file, str+"\t"+filename+"_prompt"+"\t"+filename+"_result"+"\t"+"t")
+	fmt.Fprintln(file, str+"\t"+entryID)
 }
 
-func writeFile(filename, stra string) bool {
-	file, err := os.Create(filename)
+func writeFile(filename, stra string, overwrite bool) bool {
+	var file *os.File
+	var err error
+
+	if overwrite == false {
+		file, err = os.Create(filename)
+	} else {
+		file, err = os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
+	}
+
 	if err != nil {
 		fmt.Println(err)
 		return false
@@ -468,6 +567,8 @@ func writeFile(filename, stra string) bool {
 }
 
 func validMessage(text, record, result, like, like3, match, match3, mess, inifile string) (string, string, int) {
+	text = strings.Replace(text, record, "", -1)
+
 	if strings.Index(mess, "url_private_download") != -1 && strings.Index(mess, "rich_text_section") != -1 && len(text) > 1 {
 		strb := strings.Split(mess, "url_private_download")
 		strc := strings.Split(strb[1], ",")
@@ -524,7 +625,7 @@ func validMessage(text, record, result, like, like3, match, match3, mess, inifil
 	}
 
 	if sFlag > 0 {
-		_, count := readText(inifile, false)
+		_, count := readText(inifile, false, false)
 		if count == 0 {
 			return "no index exits!", "", -1
 		}
@@ -588,7 +689,25 @@ func reLoad(filename string, count, Gramsize int) *ngram.NGramIndex {
 	return index
 }
 
-func readText(filename string, sFlag bool) (string, int) {
+func checkReaction(api *slack.Client, reactions []slack.ItemReaction, promptID string) {
+	for _, reaction := range reactions {
+		for _, user := range reaction.Users {
+			debugLog(user + " " + getUsername(api, user) + " " + reaction.Name)
+			actions = append(actions, promptAction{ID: promptID, USER: getUsername(api, user), ACTION: reaction.Name})
+		}
+	}
+}
+
+func getUsername(api *slack.Client, userID string) string {
+	user, err := api.GetUserInfo(userID)
+	if err != nil {
+		fmt.Printf("%s\n", err)
+		return ""
+	}
+	return user.Profile.RealName
+}
+
+func readText(filename string, sFlag, lFlag bool) (string, int) {
 	str := ""
 	line := 0
 
@@ -603,6 +722,11 @@ func readText(filename string, sFlag bool) (string, int) {
 	for scanner.Scan() {
 		strb := scanner.Text()
 		if len(strb) > 1 {
+			if lFlag == true {
+				debugLog("timeLock: " + strb)
+				str = str + strb
+				break
+			}
 			if sFlag == true {
 				str = str + strb + "\n"
 			}
