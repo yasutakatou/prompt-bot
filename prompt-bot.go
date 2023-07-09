@@ -334,7 +334,10 @@ func main() {
 
 func portActionReport(api *slack.Client, channel string) {
 	debugLog("reporting: " + channel)
-	strs := "```\n"
+
+	const layout = "2006/01/02 15:04:05"
+	t := time.Now()
+	strs := "[" + t.Format(layout) + "] report!\n```\n"
 	for i := 0; i < len(actions); i++ {
 		strs = strs + actions[i].ID + "," + actions[i].USER + "," + actions[i].ACTION + "\n"
 	}
@@ -567,9 +570,8 @@ func writeFile(filename, stra string, overwrite bool) bool {
 }
 
 func validMessage(text, record, result, like, like3, match, match3, mess, inifile string) (string, string, int) {
-	text = strings.Replace(text, record, "", -1)
-
 	if strings.Index(mess, "url_private_download") != -1 && strings.Index(mess, "rich_text_section") != -1 && len(text) > 1 {
+		text = strings.Replace(text, record, "", -1)
 		strb := strings.Split(mess, "url_private_download")
 		strc := strings.Split(strb[1], ",")
 		strd := strings.Replace(strc[0], "\"", "", -1)
